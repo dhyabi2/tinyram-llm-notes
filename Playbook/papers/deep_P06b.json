@@ -1,0 +1,494 @@
+[
+ {
+  "method_row_id": "P-0131",
+  "title": "Deltafin: 2.8T Kimi K3 from Four SSDs on a MacBook - Layer Streaming as a Local Inference Lever (Michael Kerkhoff, Context Studios blog, published 23 Sep 2026; benchmarks dated 8 Sep 2026)",
+  "id_read": "blog HTML at .../deltafin-2-8t-kimi-k3-from-four-ssds-on-a-macbook-layer-streaming (catalog URL is truncated)",
+  "raw_text_read": true,
+  "setup": "MacBook Pro M5 Max 128 GB, four NVMe SSDs (bandwidth not stated), Kimi K3 2.8T MoE, 1.45 TB expert weights, 16 experts/token, argonautlabsai/deltafin fork of gavamedia/deltafin; optional small drafter model; every value from a single cold run; baseline only the upstream repo on M1 Max (0.2901 tok/s; 0.68 on the 17-token prompt)",
+  "numbers": [
+   {
+    "what": "decode, 512-token response, drafter off/on",
+    "value": "0.92 / 1.00 tok/s",
+    "baseline": "-",
+    "ratio": "drafter 1.087x",
+    "where": "benchmark table"
+   },
+   {
+    "what": "decode, 128-token response, drafter off/on",
+    "value": "0.93 / 1.13 tok/s",
+    "baseline": "-",
+    "ratio": "1.215x",
+    "where": "benchmark table"
+   },
+   {
+    "what": "public 17-token prompt, median of 3",
+    "value": "0.96 tok/s",
+    "baseline": "upstream M1 Max 0.68",
+    "ratio": "1.41x",
+    "where": "text under table"
+   },
+   {
+    "what": "4-SSD vs upstream M1 Max",
+    "value": "1.00 tok/s",
+    "baseline": "0.2901",
+    "ratio": "3.4x (blog says 'a good three times')",
+    "where": "text"
+   },
+   {
+    "what": "TTFT 512-token prompt",
+    "value": "6.3 min (drafter on or off)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "table; prefill re-reads each layer's experts 8 times, fix not built"
+   },
+   {
+    "what": "SSD scaling 1/2/3/4 drives",
+    "value": "52/73/90/100 % of 4-drive speed",
+    "baseline": "-",
+    "ratio": "1 to 2 drives = 1.40x, 2 to 4 = 1.37x",
+    "where": "SSD Scaling section"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "about 1 tok/s decode",
+    "correct": "yes",
+    "true_value": "0.92-1.13"
+   },
+   {
+    "claim": "6.3 min TTFT for 512 tokens",
+    "correct": "yes",
+    "true_value": "6.3 min"
+   },
+   {
+    "claim": "author names prefill as main limit",
+    "correct": "yes",
+    "true_value": "'the true design limit'; cause = 8x re-read of each layer's experts"
+   },
+   {
+    "claim": "first pass: author unnamed",
+    "correct": "no",
+    "true_value": "author is Michael Kerkhoff, Founder (named byline); first-pass note 'author unnamed' is wrong"
+   },
+   {
+    "claim": "first pass: 404 on catalog URL",
+    "correct": "absent",
+    "true_value": "I fetched only the -layer-streaming URL; truncated URL not re-tested"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Same idea family (stream experts from NVMe, batch 1, no expert skipped) but 128 GB RAM = 9 % hot fraction, 4 SSDs, Apple unified memory, 16 experts of a 2.8T model. Not CPU-only 8-32 GB. Prefill figure measures a naive (non layer-major) prefill. One data point that matters: real SSD scaling is sub-linear (1 to 2 drives gives 1.40x, not 2x), so an ideal-2x stripe assumption should be treated as optimistic.",
+  "quality_loss": "none claimed (all experts used, drafter verified); no quality benchmark reported",
+  "ablation": "drafter on/off; SSD count 1-4 (percentages only). No cache vs layout vs prefetch ablation.",
+  "limitations": "single cold run per setting; prefill 8x re-read, fix unbuilt; author recommends short prompts",
+  "contradicts_our_findings": "No contradiction; sub-linear SSD scaling is a caution against our 2 NVMe = 2x stripe arithmetic (pubtech/C.md 2.39 to 4.78 tok/s), measured in a different regime (cache-heavy, 16 reads in parallel per layer, slowest read dictates).",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0132",
+  "title": "FluxMoE: Decoupling Expert Residency for High-Performance MoE Serving (Qingxiu Liu, Yongchao He, Runhan Jiang, Zion Wang, Bohan Zhao, Mi Zhang, Patrick P. C. Lee; CUHK/SCITIX/ICT CAS)",
+  "id_read": "arXiv 2604.02715 v1 (3 Apr 2026, different authors list) and v3 (10 Sep 2026); v2 also fetched",
+  "raw_text_read": true,
+  "setup": "v1: 4x NVIDIA L40 48GB, Xeon Platinum 8358 (128 vCPU), 2 TiB DRAM, 3 TB disk (not used for experts); Qwen3-Next-80B-A3B (160 GB, 48 layers, 512 experts) TP=4, Mixtral-8x7B (94 GB) TP=2; baselines vLLM, vLLM-O (last 12.5% layers offloaded to host). v3: adds GLM-4.5 355B on 8x H20 96GB (PCIe5), L40S Xeon Gold 5318Y, baseline KTransformers; ShareGPT prompts mean ~45-52 tokens, batch 32-256, 4096-token outputs; vLLM 0.10.2 (v1) / 0.23.0 (v3). 'Hierarchy' = lossless Huffman-compressed GPU memory (~32% saving on BF16 in v3 Table 3, ~20% in v1) + pinned host DRAM over PCIe; no NVMe tier.",
+  "numbers": [
+   {
+    "what": "Qwen3-Next, bs256 ctx4096, FluxMoE vs vLLM / vLLM-O (v1 Exp#1)",
+    "value": "3.0x / 3.7x",
+    "baseline": "vLLM, vLLM-O",
+    "ratio": "as stated",
+    "where": "v1 Sec 6.2"
+   },
+   {
+    "what": "Qwen3-Next bs32 FluxMoE vs vLLM (v1)",
+    "value": "63.9 % of vLLM",
+    "baseline": "vLLM",
+    "ratio": "0.639x",
+    "where": "v1 Fig 7a text"
+   },
+   {
+    "what": "PagedTensor overhead peak (v1)",
+    "value": "3.0 % at bs64 ctx4096",
+    "baseline": "vLLM",
+    "ratio": "-",
+    "where": "v1 Sec 6"
+   },
+   {
+    "what": "GLM-4.5 bs256 (v3)",
+    "value": "7.2x vLLM, 2.6x vLLM-O, 3.5x KTransformers; TPOT -79.0 %",
+    "baseline": "vLLM",
+    "ratio": "-",
+    "where": "v3 Sec 6.2, abstract"
+   },
+   {
+    "what": "Mixtral 2xL40S (v3)",
+    "value": "4.3x KTransformers, TPOT -29.1 %; 8.7x vLLM-O",
+    "baseline": "KTransformers",
+    "ratio": "-",
+    "where": "v3 Exp#2"
+   },
+   {
+    "what": "lossless decompression (v3)",
+    "value": "32.1-32.5 % storage saved, ~400-435 GB/s on GPU",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "v3 Table 3"
+   },
+   {
+    "what": "perplexity WikiText-2 vLLM vs FluxMoE",
+    "value": "3.6497/5.2456/3.6976 identical, delta 0.0000",
+    "baseline": "vLLM",
+    "ratio": "1.0",
+    "where": "v3 Table 7"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "'streams expert parameters from a storage hierarchy'",
+    "correct": "partly",
+    "true_value": "hierarchy is GPU-compressed + host DRAM; no SSD/NVMe tier in the evaluated system"
+   },
+   {
+    "claim": "'pipelines transfers with layer compute'",
+    "correct": "yes",
+    "true_value": "prefetch layer i+1 during layer i"
+   },
+   {
+    "claim": "first pass 3.0x / 3.7x / 63.9% / 3.0%",
+    "correct": "yes",
+    "true_value": "correct for v1; v3 (current) has different headline numbers 7.2x etc and different GPUs"
+   },
+   {
+    "claim": "first pass 'last 18k chars unread'",
+    "correct": "yes",
+    "true_value": "now fully read: no NVMe streaming"
+   }
+  ],
+  "transfers": "no",
+  "why": "Datacenter GPUs, large batch (32-256) offline throughput, goal is freeing VRAM for KV cache; experts never leave RAM (host DRAM, 2 TiB). Batch 1, CPU-only, NVMe-streamed regime is untouched; its own bs32 result is a loss (0.64x).",
+  "quality_loss": "lossless; perplexity identical (v3 Table 7)",
+  "ablation": "FluxMoE-H (whole-layer placement) vs full bandwidth-balanced hierarchy; planner CI/AG sensitivity (v3 Table 6). No NVMe ablation.",
+  "limitations": "decompression overhead at small batch; CPU-backed layers fully PCIe-bound (v3 Table 4 stall); requires GPU",
+  "contradicts_our_findings": "none",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0134",
+  "title": "InstInfer: In-Storage Attention Offloading for Cost-Effective Long-Context LLM Inference (Xiurui Pan, Endian Li, Qiao Li, Shengwen Liang, Yizhou Shan, Ke Zhou, Yingwei Luo, Xiaolin Wang, Jie Zhang; Peking Univ. et al.)",
+  "id_read": "arXiv 2409.04992 v1, 8 Sep 2024 (cs.AR); HPCA'25 version cited elsewhere as InstAttention (from Conduit refs)",
+  "raw_text_read": true,
+  "setup": "OPT-13B FP16 (LLaMA-2-7B for accuracy), seq in/out 1024; A6000 48GB, Xeon 5320 2.2GHz, 96GB DDR4, Samsung 980pro; CSD = software-defined emulation (NVMeVirt) calibrated from an OpenSSD prototype and Zynq7045 resource use, 8 flash channels x 1.4 GB/s (11.2 GB/s internal); baselines DeepSpeed, FlexGen, FlexGen-SparQ; batch 4-256",
+  "numbers": [
+   {
+    "what": "throughput vs FlexGen, up to",
+    "value": "11.1x (InstI-SparF)",
+    "baseline": "FlexGen",
+    "ratio": "11.1x",
+    "where": "abstract, Sec VI-C"
+   },
+   {
+    "what": "InstI vs FlexGen at bs=64",
+    "value": "6.85x",
+    "baseline": "FlexGen",
+    "ratio": "6.85x",
+    "where": "Fig 12"
+   },
+   {
+    "what": "InstI bs256 vs best baseline (DeepSpeed bs16)",
+    "value": "+4.6 %",
+    "baseline": "DeepSpeed bs16",
+    "ratio": "1.046x",
+    "where": "Sec VI-C text"
+   },
+   {
+    "what": "InstI bs256 vs FlexGen bs32 max",
+    "value": "10.5x; SparF vs FlexGen-SparQ 3.11x",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec VI-C"
+   },
+   {
+    "what": "KV access overhead reduction",
+    "value": "88.1 % dense, 94.0 % with SparF",
+    "baseline": "FlexGen",
+    "ratio": "-",
+    "where": "Sec VI-D"
+   },
+   {
+    "what": "20 CSDs vs 1",
+    "value": "8.99x dense, 7.29x sparse",
+    "baseline": "1 CSD",
+    "ratio": "-",
+    "where": "Fig 17a"
+   },
+   {
+    "what": "FPGA DSP use on Zynq7045",
+    "value": "85.33 % (768/900 DSP)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Table I"
+   },
+   {
+    "what": "CSD compute vs GPU",
+    "value": "2-3 orders of magnitude weaker",
+    "baseline": "GPU",
+    "ratio": "-",
+    "where": "Sec I"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "up to 11.1x over SSD-based baselines",
+    "correct": "yes",
+    "true_value": "vs FlexGen"
+   },
+   {
+    "claim": "94% (data migration)",
+    "correct": "yes",
+    "true_value": "94.0 % KV access/data migration reduction (SparF variant)"
+   },
+   {
+    "claim": "same hardware class FPGA CSD, offloads KV and attention not weights",
+    "correct": "yes",
+    "true_value": "paper explicitly refuses to offload QKV/O/FFN GeMM because it is 'near the maximum computing capability of CSD'"
+   },
+   {
+    "claim": "first pass: 2-3 orders of magnitude from search snippet",
+    "correct": "yes",
+    "true_value": "now confirmed in paper text, Sec I"
+   }
+  ],
+  "transfers": "no",
+  "why": "Dense 13B, GPU host, batch up to 256, KV cache offload. The paper itself says weight GeMM (the expert-GEMV analogue) overloads the CSD and keeps it on the GPU, which supports killing expert-GEMV-in-CSD. Evaluated on an emulated CSD, not silicon. Even there the win over the best in-memory baseline is 4.6 %.",
+  "quality_loss": "SparF 1/8 compression 'negligible' loss vs SparQ (Fig 11, graph only; accuracy on OPT-13B/LLaMA-2-7B datasets)",
+  "ablation": "Dense vs SparF, 1 vs 2 vs 20 CSDs, compression ratio sweep",
+  "limitations": "relies on emulation; CSD internal 11.2 GB/s still below PCIe 32 GB/s to host memory",
+  "contradicts_our_findings": "none; consistent with CSD compute being the limit",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0135",
+  "title": "HillInfer: Efficient Long-Context LLM Inference on the Edge with Hierarchical KV Eviction using SmartSSD (He Sun, Shinan Liu, Li Li, Mingjun Xiao)",
+  "id_read": "arXiv 2602.18750 v2 (25 Mar 2026) and v1 (21 Feb 2026) compared",
+  "raw_text_read": true,
+  "setup": "LongChat-7B, Llama-13B, Qwen-7B, OPT-6.7B; RTX 4090 24GB, Xeon Platinum 8352V, 64 GB, 300 GB Intel SSD PCIe4, Samsung SmartSSD (UltraScale+ FPGA, 4 GB DDR4, 4 TB NAND) over PCIe3; batch 8 (up to 12 on OPT-6.7B); baselines H2O-like, Prefetch-based (InfiniGen), LeoAM-like, full cache",
+  "numbers": [
+   {
+    "what": "speedup vs baselines",
+    "value": "4.21-8.56x",
+    "baseline": "baselines above",
+    "ratio": "-",
+    "where": "Fig 13 / abstract"
+   },
+   {
+    "what": "latency reduction",
+    "value": "76.25-88.32 %",
+    "baseline": "baselines",
+    "ratio": "-",
+    "where": "Sec 5.3"
+   },
+   {
+    "what": "SmartSSD peak bandwidth",
+    "value": "~3.2 GB/s in v2 (v1 said ~4 GB/s)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec 5.2 (v2), v1 line 415"
+   },
+   {
+    "what": "compute CPU vs SmartSSD (Fig 5a)",
+    "value": "CPU ~40.32 TFLOPS and ~31.5 GB/s; SmartSSD ~0.8 TFLOPS and ~3.2 GB/s",
+    "baseline": "-",
+    "ratio": "SmartSSD 1/50 compute",
+    "where": "Fig 5a"
+   },
+   {
+    "what": "host SSD bandwidth measured",
+    "value": "6.5-7.2 GB/s avg 6.85",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Fig 3"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "SmartSSD used for KV eviction on edge PCs",
+    "correct": "yes",
+    "true_value": "only token-importance scoring (raw Q.K dot products) on FPGA"
+   },
+   {
+    "claim": "notes SSD bandwidth remains bottleneck even with in-storage compute",
+    "correct": "partly",
+    "true_value": "paper argues the CSD removes the host PCIe bottleneck via P2P; the bandwidth limit cited is host-SSD KV transfer. The 3.2 GB/s device figure is the supporting fact"
+   },
+   {
+    "claim": "first pass 4 GB/s SmartSSD",
+    "correct": "no",
+    "true_value": "v2 (latest) states ~3.2 GB/s; 4 GB/s is v1"
+   },
+   {
+    "claim": "first pass up to 8.56x, 4.21-8.56, 76.25-88.32",
+    "correct": "yes",
+    "true_value": "same in v1 and v2"
+   }
+  ],
+  "transfers": "no",
+  "why": "KV scoring, not weights; GPU 4090 host; batch 8. Useful fact: a real SmartSSD reads NAND at ~3.2 GB/s internally, the same as one laptop NVMe (3.1 GB/s measured in our work), so in-storage compute buys no extra weight bandwidth per drive.",
+  "quality_loss": "accuracy comparable to full cache and baselines at 10-80 % retention (Fig 11, graphs only)",
+  "ablation": "HKM, APP, CEC ablations (figures)",
+  "limitations": "authors note FPGA resource limits and selective algorithm simplification (softmax removed); setup inconsistent (RTX 3080 32 GB in intro)",
+  "contradicts_our_findings": "none",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0136",
+  "title": "Conduit: Programmer-Transparent Near-Data Processing Using Multiple Compute-Capable Resources in Solid State Drives (Rakesh Nadig ... Onur Mutlu; ETH Zurich)",
+  "id_read": "arXiv 2601.17633 v1, 24 Jan 2026 (cs.AR)",
+  "raw_text_read": true,
+  "setup": "simulation: MQSim/Ramulator-based SSD 2 TB, 8 channels x 1.2 GB/s, external PCIe4 8 GB/s, 5 ARM Cortex-R8 controller cores, 2 GB LPDDR4; real hosts Xeon Gold 5118 6-core and A100 40GB; workloads AES, XOR filter, heat-3d, jacobi-1d, LLaMA2-7B INT8 inference, LLaMA2-7B INT8 training; baselines CPU, GPU, ISP, PuD-SSD, Flash-Cosmos, Ares-Flash, BW- and DM-Offloading, Ideal",
+  "numbers": [
+   {
+    "what": "speedup avg",
+    "value": "4.2x CPU, 1.8x GPU, 3.3x ISP, 2.2x PuD-SSD, 3.3x Flash-Cosmos, 2.3x Ares-Flash, 2.0x BW-Offl, 1.8x DM-Offl",
+    "baseline": "each",
+    "ratio": "as stated",
+    "where": "Sec 6.1"
+   },
+   {
+    "what": "energy vs DM-Offloading",
+    "value": "-46.8 % (-78.2 % vs CPU)",
+    "baseline": "DM-Offl",
+    "ratio": "-",
+    "where": "Sec 6.2"
+   },
+   {
+    "what": "fraction of Ideal",
+    "value": "62 % perf, 68 % energy efficiency",
+    "baseline": "Ideal",
+    "ratio": "-",
+    "where": "Sec 6.1-6.2"
+   },
+   {
+    "what": "runtime overhead",
+    "value": "3.77 us avg (up to 33 us)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec 4"
+   },
+   {
+    "what": "DM-Offloading gap to Ideal",
+    "value": "2.5x avg, up to 4.6x LLM inference/training",
+    "baseline": "Ideal",
+    "ratio": "-",
+    "where": "Sec 3"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "simulator study incl LLM workloads",
+    "correct": "yes",
+    "true_value": "LLaMA2-7B INT8 inference and training"
+   },
+   {
+    "claim": "no MoE expert numbers",
+    "correct": "yes",
+    "true_value": "confirmed over full text: no MoE/expert/GEMV throughput"
+   },
+   {
+    "claim": "first pass 1.8x, 46 %, 3.77 us, 2.5x/4.6x",
+    "correct": "yes",
+    "true_value": "46 % is 46.8 % vs DM-Offloading"
+   }
+  ],
+  "transfers": "no",
+  "why": "Simulator, dense 7B, scheduling policy across SSD compute resources; no storage-bound MoE decode data.",
+  "quality_loss": "none (exact ops)",
+  "ablation": "offloading-policy comparison only",
+  "limitations": "evaluated only in simulation; workload footprint 2x SSD capacity artificially",
+  "contradicts_our_findings": "none",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0137",
+  "title": "Samsung Electronics Develops Second-Generation SmartSSD Computational Storage Drive with Upgraded Processing Power (BusinessWire, 20 Jul 2022)",
+  "id_read": "none",
+  "raw_text_read": false,
+  "setup": "not read",
+  "numbers": [],
+  "catalog_numbers_correct": [
+   {
+    "claim": "product exists, scan-heavy DB gains over 50% less processing time, no GEMV numbers",
+    "correct": "absent",
+    "true_value": "UNVERIFIED from primary source"
+   }
+  ],
+  "transfers": "no",
+  "why": "Enterprise E3 module (from first pass, unverified), no GEMV figures; HillInfer (P-0135) did measure the first-generation SmartSSD at ~3.2 GB/s and ~0.8 TFLOPS, which is the nearest read evidence.",
+  "quality_loss": "n/a",
+  "ablation": "n/a",
+  "limitations": "n/a",
+  "contradicts_our_findings": "none",
+  "unread_reason": "businesswire.com returned Access Denied to curl (HTML 'Access Denied'); a retry with a spoofed browser user agent was blocked by the permission system and not pursued; news.samsung.com WebFetch timed out. No raw text obtained."
+ },
+ {
+  "method_row_id": "P-0138",
+  "title": "Containerized In-Storage Processing and Computing-Enabled SSD Disaggregation (DockerSSD) (Miryeong Kwon, Donghyun Gouk, ... Mahmut Kandemir, Myoungsoo Jung; Panmnesia / PSU / KAIST)",
+  "id_read": "arXiv 2506.06769 v1, 7 Jun 2025 (extended version of IEEE Micro paper)",
+  "raw_text_read": true,
+  "setup": "FPGA prototype (16nm FinFET, six RISC-V in-order cores, Virtual-FW) for I/O-intensive workloads; gem5 full-system simulation cross-validated against RTL; LLM part is a simulator study: 8 dense LLMs (lamda-137B, gpt3-175B, jurassic-178B, pangu-200B, gopher-280B, turing-530B, palm-540B, megatron-1T) on pools of 16-128 DockerSSDs (400 GB each) vs hosts with 64 GB DRAM; seq 32K, batch 1 per GPU; open-source distributed-inference simulator extended with an analytical KV-cache model; H-Cache = KV cache swapped to 400 GB SSD via Linux swap",
+  "numbers": [
+   {
+    "what": "D-Cache vs H-Cache distributed LLM inference",
+    "value": "7.9x",
+    "baseline": "H-Cache",
+    "ratio": "7.9x",
+    "where": "abstract, Sec on disaggregated LLM"
+   },
+   {
+    "what": "H-Cache vs H-NoCache / D-Cache vs D-NoCache",
+    "value": "421x / 4.6Kx",
+    "baseline": "NoCache",
+    "ratio": "-",
+    "where": "same, Fig 12"
+   },
+   {
+    "what": "D-NoCache vs H-NoCache",
+    "value": "1.7x slower (weak in-SSD compute)",
+    "baseline": "host",
+    "ratio": "0.59x",
+    "where": "Fig 12b text"
+   },
+   {
+    "what": "batch sensitivity D-Cache over H-Cache",
+    "value": "max 1.3x (lamda, megatron)",
+    "baseline": "H-Cache",
+    "ratio": "1.3x",
+    "where": "Fig 13c/d"
+   },
+   {
+    "what": "I/O-intensive apps vs host",
+    "value": "up to 2.0x (1.3x and 1.8x vs two prior ISP models)",
+    "baseline": "host/prior ISP",
+    "ratio": "-",
+    "where": "intro, Fig 10-11"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "7.9x average LLM performance gain from compute-enabled storage pool",
+    "correct": "yes",
+    "true_value": "D-Cache vs H-Cache; gain comes from the KV cache being held in flash vs swapping, not from computing faster"
+   },
+   {
+    "claim": "self-reported, I did not open",
+    "correct": "yes",
+    "true_value": "now opened and read in full"
+   }
+  ],
+  "transfers": "no",
+  "why": "Simulated, dense models 137B-1T, pools of up to 128 drives, baseline is a swap-based KV cache; and the paper itself shows in-SSD compute is 1.7x slower than host. No MoE, no batch-1 single machine.",
+  "quality_loss": "none claimed (exact computation)",
+  "ablation": "D-Naive/D-FullOS/D-Virtual-FW firmware variants; cache vs no cache",
+  "limitations": "LLM results use an analytical KV model; baseline weak (Linux swap)",
+  "contradicts_our_findings": "none",
+  "unread_reason": ""
+ }
+]

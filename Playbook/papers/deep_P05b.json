@@ -1,0 +1,649 @@
+[
+ {
+  "method_row_id": "P-0111",
+  "title": "Fast Inference of Mixture-of-Experts Language Models with Offloading (Eliseev, Mazur; arXiv 2312.17238v1, 28 Dec 2023)",
+  "id_read": "arXiv:2312.17238v1 PDF",
+  "raw_text_read": true,
+  "setup": "Mixtral-8x7B-Instruct (46.7B, 8 experts/layer, top-2), HQQ attn 4-bit + experts 2/3-bit; T4 16GB, RTX 3060 12GB, RTX 3080 Mobile 16GB, A100 reference; PCIe, host RAM (no SSD); batch 1, sampling, OpenAssistant; per-layer LRU k=2 (12GB) or k=4 (16GB); speculative loading of 1-2 experts via next layer gate on current hidden state; baseline accelerate naive offloading",
+  "numbers": [
+   {
+    "what": "full algorithm tok/s, 2-bit experts, A100/3080M/3060/T4",
+    "value": "3.061/2.655/2.278/2.092",
+    "baseline": "naive 1.392/1.059/0.919/0.661",
+    "ratio": "2.20/2.51/2.48/3.17",
+    "where": "Table 2 p.7"
+   },
+   {
+    "what": "full algorithm tok/s, 3-bit experts, A100/3080M/3060/T4",
+    "value": "2.845/2.475/2.038/1.603",
+    "baseline": "naive 1.246/0.914/1.791(anomalous)/0.580",
+    "ratio": "2.28/2.71/1.14/2.76",
+    "where": "Table 2 p.7"
+   },
+   {
+    "what": "full vs no LRU and no preload",
+    "value": "2.265..1.061 baseline rows",
+    "baseline": "computed",
+    "ratio": "1.35-1.79",
+    "where": "Table 2 p.7"
+   },
+   {
+    "what": "LRU only gain (without preload / without both)",
+    "value": "",
+    "baseline": "computed",
+    "ratio": "1.27-1.38",
+    "where": "Table 2 p.7"
+   },
+   {
+    "what": "preload gain (full / without preload)",
+    "value": "",
+    "baseline": "computed",
+    "ratio": "1.05-1.33",
+    "where": "Table 2 p.7"
+   },
+   {
+    "what": "MMLU 5-shot FP16 vs 4b attn + 2b experts vs 3b experts",
+    "value": "70.51 / 65.58 / 68.47",
+    "baseline": "FP16",
+    "ratio": "-4.93 / -2.04 points",
+    "where": "Table 1 p.6"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "Offloading suits large batches; interactive much slower",
+    "correct": "yes (paraphrase of Sec 2.3 motivation about prior work; no number; not a result of this paper)",
+    "true_value": "Sec 2.3 p.3"
+   },
+   {
+    "claim": "first pass: full algorithm 1.6-3.1 tok/s",
+    "correct": "yes",
+    "true_value": "1.603-3.061"
+   },
+   {
+    "claim": "first pass: naive 0.58-1.39",
+    "correct": "yes excluding 3060 3-bit 1.791 anomaly",
+    "true_value": "0.580-1.792"
+   },
+   {
+    "claim": "first pass: LRU+preload 1.4-1.8x over no cache",
+    "correct": "yes",
+    "true_value": "1.35-1.79"
+   },
+   {
+    "claim": "text claim 2-4 tok/s",
+    "correct": "no (overstates)",
+    "true_value": "table min 1.603"
+   }
+  ],
+  "transfers": "partly",
+  "why": "LRU reuse and batch-1 argument transfer; breaks: GPU compute and PCIe from host RAM not SSD, cache is 25-50% of experts per layer vs 4-20 token footprints of 24,576 experts for us, top-2/8 vs top-10/512, 2-bit quant; speculative-load gain needs evaluation at 512 experts",
+  "quality_loss": "LRU and speculation lossless; quantization only: MMLU 70.51 -> 65.58 (2-bit experts) or 68.47 (3-bit experts); Wiki2 3.59 -> 4.61/4.05",
+  "ablation": "Table 2 isolates LRU, preload, naive; no layout ablation",
+  "limitations": "No explicit limitation section; exact next-layer prefetch impossible without retraining (Sec 3.2); future work only",
+  "contradicts_our_findings": "No. Note per-layer LRU with k=2 equals one token's top-2, so its LRU gain is within-layer reuse, not comparable to global LRU below one footprint (our 0.0 hit).",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0113",
+  "title": "llama.cpp issue #19825 'Managed SSD offloading for MoE to prevent macOS kernel panics' (zayutaha, 2026-02-23) plus r/LocalLLaMA post by u/zyxciss 'Qwen 3.8 Flash Next-GSQ-RCO-IQ2_XS at ~21 tok/s on RTX 3060 12GB + 16GB DDR4' (9 Oct 2026)",
+  "id_read": "GitHub API issue JSON; prismix.dev mirror of the Reddit post (original not opened)",
+  "raw_text_read": true,
+  "setup": "Post: Qwen 3.8 Flash Next 125B MoE 512 experts top-10 IQ2_XS 68GB; RTX 3060 12GB, 16GB single-channel DDR4 (~19GB/s), mid-tier NVMe ~2.1GB/s, CachyOS, llama.cpp CUDA, MemoryMax=6G cgroup; --moe-direct-io + prefetch, 72 slots/layer (14% of experts); batch 1. Issue: M4 Pro 24GB feature request, ik_llama.cpp --cpu-moe numbers 35+/25+/10+ t/s on models that mostly fit",
+  "numbers": [
+   {
+    "what": "stock mmap decode",
+    "value": "1.41-2.12 tok/s, 1,140-1,565 major faults/token, 208-312 MB/token",
+    "baseline": "",
+    "ratio": "1.0",
+    "where": "Reddit mirror table"
+   },
+   {
+    "what": "direct-io blocking demand-only",
+    "value": "0.73 tok/s, 0 faults, ~206 MB/token",
+    "baseline": "stock 1.41-2.12",
+    "ratio": "0.34-0.52x",
+    "where": "Reddit mirror table"
+   },
+   {
+    "what": "direct-io + prefetch warm",
+    "value": "20.14-21.13 tok/s (some 24+)",
+    "baseline": "stock 1.41-2.12",
+    "ratio": "9.5x-15.0x",
+    "where": "Reddit mirror table"
+   },
+   {
+    "what": "cold start new topic",
+    "value": "3.5-4.5 tok/s",
+    "baseline": "stock",
+    "ratio": "1.7-3.2x",
+    "where": "Reddit mirror text"
+   },
+   {
+    "what": "derived: blocking effective bandwidth",
+    "value": "0.73 x 206 MB = 150 MB/s",
+    "baseline": "disk 2.1 GB/s",
+    "ratio": "7%",
+    "where": "derived by me"
+   },
+   {
+    "what": "derived: cache footprint",
+    "value": "72 slots x 48 layers x ~0.43MB = ~1.5GB = ~7 token footprints",
+    "baseline": "our 8GB = 2.1 footprints",
+    "ratio": "~3.4x larger",
+    "where": "derived by me"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "stock mmap 1.41-2.12 tok/s",
+    "correct": "yes (Reddit post, not the issue)",
+    "true_value": "1.41-2.12"
+   },
+   {
+    "claim": "1,140-1,565 major faults/token",
+    "correct": "yes (post)",
+    "true_value": "1,140-1,565"
+   },
+   {
+    "claim": "208-312 MB SSD I/O per token",
+    "correct": "yes (post)",
+    "true_value": "208-312 MB"
+   },
+   {
+    "claim": "numbers come from issue #19825",
+    "correct": "no",
+    "true_value": "issue has none of them; ik_llama.cpp 35+/25+/10+ t/s unrelated"
+   },
+   {
+    "claim": "io_uring layer gave slightly under 2x",
+    "correct": "absent",
+    "true_value": "not in issue or post; first pass says an HN comment, unverified"
+   },
+   {
+    "claim": "on a 16 GB machine",
+    "correct": "yes, plus RTX 3060 GPU and 6GB cgroup cap",
+    "true_value": ""
+   }
+  ],
+  "transfers": "partly",
+  "why": "Same model class and geometry (125B, 512 experts, top-10) = closest public data point; breaks: GPU, 2-bit experts ~450KiB (6x smaller than ours), warm cache steady state, self-reported, no code; blocking direct I/O below mmap supports our finding that explicit reads without a cache lose",
+  "quality_loss": "Author claims bit-exact vs stock for the same IQ2_XS file; no eval shown; the 2-bit quant itself lossy",
+  "ablation": "Blocking direct-io vs direct-io+prefetch isolates cache/prefetch/overlap from direct I/O; cache and prefetch not separated; no layout ablation",
+  "limitations": "Author: cold starts slow, prompt processing slow (512+ tokens thrash 72 slots), MTP speculation can make things slower",
+  "contradicts_our_findings": "No; supports C.md screen1 #18 (explicit pread without cache loses). C.md attributes the numbers to the issue; they are from the Reddit post.",
+  "unread_reason": "Reddit original and comments and the HN comment not opened (mirror used)"
+ },
+ {
+  "method_row_id": "P-0114",
+  "title": "The Other Half of the Memory Wall: Serving 35B MoEs from SSD with Trained Routing Prediction (Edge0; Lin, Wang, Cai, Liu, Zeng; AutoArk; arXiv 2609.18063v2, 17 Sep 2026)",
+  "id_read": "arXiv:2609.18063v2 PDF (decodes fine)",
+  "raw_text_read": true,
+  "setup": "Qwen3.6-35B-A3B (40 layers x 256 experts, native top-8, 19.5GB int4 g64, 1.77MB/expert) narrowed to K=4 with recovery LoRA r=16 and 33 prerouter heads; 8B tier Ling 3.0 tiny 24x128 K=8; MLX only; Mac mini M4 Pro 24GB (tier table), MacBook M2 16GB (prerouter A/B, 18.4GiB checkpoint does not fit); mmap + OS page cache + LRU bundles; batch 1; storage bandwidth not stated; medians of 3 same-session rotated rounds, +-40% single-shot spread",
+  "numbers": [
+   {
+    "what": "35B tier decode, 24GB M4 Pro, K=4",
+    "value": "20.4 tok/s, 2.9GiB peak",
+    "baseline": "resident mlx-lm 3.9 tok/s at 18.2GiB",
+    "ratio": "5.2x",
+    "where": "Table 1 p.8, Sec 3.1 p.5"
+   },
+   {
+    "what": "same, prerouter disabled",
+    "value": "19.9 tok/s",
+    "baseline": "20.4 with prerouter",
+    "ratio": "prerouter share 1.025x",
+    "where": "Table 1 caption p.8"
+   },
+   {
+    "what": "16GB M2 decode K=2",
+    "value": "8.6",
+    "baseline": "4.8 on-demand",
+    "ratio": "1.79 (+80%)",
+    "where": "Table 3 p.9"
+   },
+   {
+    "what": "16GB M2 decode K=4",
+    "value": "6.4",
+    "baseline": "3.5 on-demand",
+    "ratio": "1.83 (+82%)",
+    "where": "Table 3 p.9"
+   },
+   {
+    "what": "16GB M2 decode K=8",
+    "value": "3.3",
+    "baseline": "1.8 on-demand",
+    "ratio": "1.83 (+84%)",
+    "where": "Table 3 p.9"
+   },
+   {
+    "what": "bytes per step K=4",
+    "value": "58.9 MiB prerouter",
+    "baseline": "50.9 MiB on-demand",
+    "ratio": "+16%",
+    "where": "Table 4 p.11"
+   },
+   {
+    "what": "blocked-on-load ms/step K=4",
+    "value": "101.9",
+    "baseline": "244.0",
+    "ratio": "0.42",
+    "where": "Sec 5.3 p.8"
+   },
+   {
+    "what": "quality avg of 5 benchmarks (35B tier)",
+    "value": "79.2",
+    "baseline": "83.2 fp16",
+    "ratio": "-4.0 points (AIME -6.1, HumanEval -4.2, GPQA -2.0, MMLU-Pro -3.6, IFBench -3.8)",
+    "where": "Table 2 p.9"
+   },
+   {
+    "what": "adjacent-token expert agreement",
+    "value": "about a quarter of a layer's set",
+    "baseline": "",
+    "ratio": "",
+    "where": "Sec 5.3 p.9"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "20.4 tok/s on a 24 GB M4 Pro",
+    "correct": "yes",
+    "true_value": "Table 1"
+   },
+   {
+    "claim": "SSD-served 35B with trained prerouter overlapping reads with compute",
+    "correct": "yes",
+    "true_value": "but prerouter off = 19.9 tok/s on that machine"
+   },
+   {
+    "claim": "the overlap lever needs training",
+    "correct": "yes",
+    "true_value": "heads + SFT ~2M rows + on-policy ~200k rows"
+   },
+   {
+    "claim": "first pass: 8.6 vs 4.8, 6.4 vs 3.5, 3.3 vs 1.8 (+80-84%)",
+    "correct": "yes (K=2,4,8)",
+    "true_value": "Table 3"
+   },
+   {
+    "claim": "first pass: AIME -6.1",
+    "correct": "yes",
+    "true_value": "86.6 vs 92.7"
+   },
+   {
+    "claim": "first pass: PDF did not decode",
+    "correct": "no",
+    "true_value": "PDF decodes"
+   },
+   {
+    "claim": "B.md: naive on-demand streaming ineffective, 20.4 vs 3.9",
+    "correct": "no (3.9 is a fully resident engine; on-demand streaming without prerouter is 19.9)",
+    "true_value": "Table 1, Sec 3.1"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Overlap-by-prediction idea and the findings (adjacent-token agreement ~25%, one-layer-ahead prediction loses to LRU) transfer; headline does not: Apple GPU/MLX, model nearly fits RAM (19.5GB in 16-24GB) vs ours 69GB in 8-32GB, retraining + LoRA required, K narrowed 8->4, disk read at most 12% of step, CPU graph building is the floor, gain shrinks on hot caches/fast storage",
+  "quality_loss": "avg -4.0 points vs fp16 on 5 benchmarks (AIME -6.1 worst); 8B tier avg -2.8 (AIME -10.0); int4 + routing replacement not separated",
+  "ablation": "prerouter on/off at K=2/4/8 (16GB) and K=4 (24GB); no LoRA-only or cache-size ablation",
+  "limitations": "Single request; CPU-side graph building 44ms/step floor; gains shrink on hot caches and fast storage; reuse-bounded; costs unreclaimable residency; quality loss in long reasoning; MLX only",
+  "contradicts_our_findings": "B.md misdescribes it as showing naive streaming ineffective; the paper shows 19.9 tok/s streaming without the prerouter on 24GB.",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0116",
+  "title": "Paging the Experts: A Reproducible Characterization of Flash-Backed MoE Inference on iPhone (Musa Shams, independent; arXiv 2609.29032v1, 24 Sep 2026)",
+  "id_read": "arXiv:2609.29032v1 PDF",
+  "raw_text_read": true,
+  "setup": "Qwen3.6-35B-A3B 4-bit MLX (40 layers, 256 experts, top-8, 1.6875MiB/expert, routed 18.12GB); Swift/MLX runtime Routide, positional reads, byte-budgeted (layer,expert) cache, per-expert 64KiB-aligned block with gate/up/down+scales; iPhone 17 Pro Max (RAM and flash bandwidth not stated), M1 Ultra 128GiB Mac controls; greedy, batch 1, serial prefill; five 128-token prompts",
+  "numbers": [
+   {
+    "what": "LRU hit at 512/576/1024 MiB (offline replay of 5 phone routes)",
+    "value": "0.00 / 38.58 / 47.59 %",
+    "baseline": "random 18.80/21.80/37.47; pinned farthest-next-use 54.49/56.93/68.23",
+    "ratio": "",
+    "where": "Table p.6, abstract"
+   },
+   {
+    "what": "capacity",
+    "value": "303 experts at 512MiB, 341 at 576MiB; min reuse distance 312; one forward requests 320 experts",
+    "baseline": "10,240 experts total (341 = 3.3%)",
+    "ratio": "",
+    "where": "Sec 5.1 p.6"
+   },
+   {
+    "what": "initial calibration decode, 512 vs 576 MiB (8 tokens, cold median)",
+    "value": "2.246 vs 3.052 tok/s; reads 16.987 vs 9.709 GB",
+    "baseline": "",
+    "ratio": "1.36x; reads -43%",
+    "where": "table p.6"
+   },
+   {
+    "what": "512-token runs decode",
+    "value": "1.795, 1.852 (no prefetch); 2.085, 1.864 (prefetch)",
+    "baseline": "",
+    "ratio": "identical configs differ 10.58% in elapsed",
+    "where": "Sec 5.4 p.8"
+   },
+   {
+    "what": "576 vs 512 elapsed (iOS 27 pairs)",
+    "value": "-10.71,-16.41,-15.84,+7.18,-7.86,-10.93 %",
+    "baseline": "",
+    "ratio": "reads -38 to -40%",
+    "where": "Sec 5.4 p.9"
+   },
+   {
+    "what": "prefetch predictor precision",
+    "value": "61.31% (5,359/8,741); live Mac 512MiB: 10,334 loads, 6,223 useful, 4,111 wasted, +1.307% reads",
+    "baseline": "",
+    "ratio": "",
+    "where": "Sec 5.2 p.6-7"
+   },
+   {
+    "what": "process footprint peak",
+    "value": "1.87-2.32 GiB short; 2.39-2.73 GiB at 340 tokens",
+    "baseline": "",
+    "ratio": "",
+    "where": "Sec 5.5 p.9-10"
+   },
+   {
+    "what": "cross-runtime equivalence",
+    "value": "phone vs resident Python: 0/5 sequences identical; next-token 624/640 = 97.5%",
+    "baseline": "",
+    "ratio": "",
+    "where": "Sec 5.3 p.8"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "pages quantized routed experts from flash building on LLM in a flash",
+    "correct": "yes",
+    "true_value": "Sec 2"
+   },
+   {
+    "claim": "no expert-bundling layout found",
+    "correct": "no (per-expert bundle of gate/up/down + scales, 64KiB-aligned, 27 units; no cross-expert clustering, no row-column bundling)",
+    "true_value": "Sec 3.1 p.3"
+   },
+   {
+    "claim": "first pass: LRU 0.00/38.58/47.59; random 18.80; oracle 54.49",
+    "correct": "yes (54.49 is pinned farthest-next-use; relaxed oracle 54.73)",
+    "true_value": ""
+   },
+   {
+    "claim": "first pass: decode ~1.8-2.1 tok/s",
+    "correct": "yes for 512-token runs; calibration run 2.2-3.2",
+    "true_value": ""
+   },
+   {
+    "claim": "first pass: footprint 1.9-2.7 GiB",
+    "correct": "yes",
+    "true_value": "1.87-2.73"
+   }
+  ],
+  "transfers": "partly",
+  "why": "LRU cliff at one forward's working set (312-320 experts) and the policy dependence of the cliff transfer and match our measurement; breaks: 256 experts top-8 vs 512 top-10, Apple GPU, no flash bandwidth measured so no speed model, tiny correlated workloads, thermal confounds",
+  "quality_loss": "Not evaluated; no lossy routing modification; sequence equivalence with resident reference not established",
+  "ablation": "Cache policy x capacity replay grid + oracle; prefetch isolated with preserve-resident variant (shows apparent prefetch gain can be pollution); no layout ablation",
+  "limitations": "Small correlated workloads, serial prefill, thermal stop, logical not physical I/O, no power/energy claim, OS version drift, cross-runtime numerical differences",
+  "contradicts_our_findings": "Contradicts one sentence in C.md ('shows no bundling layout'). Supports our LRU cliff and 'anything but strict LRU wins below one footprint'.",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0117",
+  "title": "BuddyMoE: Exploiting Expert Redundancy to Accelerate Memory-Constrained Mixture-of-Experts Inference (Wang et al., SJTU; arXiv 2511.10054v1, 13 Nov 2025)",
+  "id_read": "arXiv:2511.10054v1 PDF",
+  "raw_text_read": true,
+  "setup": "DeepSeek-V2-Lite (64 experts, top-6); one A100 (PCIe) + Xeon Platinum 8457C; inside llama.cpp CUDA backend with CPU offload; cache rate c in {0.375,0.5,0.75} of experts GPU-resident; baselines original (wait on PCIe) and random replacement; ARC-Easy/ARC-Challenge; batch size not stated",
+  "numbers": [
+   {
+    "what": "c=0.75 tok/s (tau .95,|B|16,rho3)",
+    "value": "36.75 (ARC avg 0.695)",
+    "baseline": "original 34.23 (ARC 0.735)",
+    "ratio": "1.074",
+    "where": "Table 2 p.8"
+   },
+   {
+    "what": "c=0.50 tok/s (rho3)",
+    "value": "30.21 (ARC 0.635)",
+    "baseline": "original 28.56 (ARC not printed)",
+    "ratio": "1.058",
+    "where": "Table 3 p.9"
+   },
+   {
+    "what": "c=0.375 tok/s (rho3)",
+    "value": "27.33 (ARC 0.645)",
+    "baseline": "original 24.78 (ARC not printed)",
+    "ratio": "1.103",
+    "where": "Table 4 p.9"
+   },
+   {
+    "what": "random replacement ARC avg at 0.75/0.5/0.375",
+    "value": "0.55 / 0.23 / 0.16",
+    "baseline": "original 0.735",
+    "ratio": "",
+    "where": "Tables 2-4"
+   },
+   {
+    "what": "ARC relative loss paired with each speedup",
+    "value": "-5.4% (0.75); -13.6% (0.5); -12.2% (0.375) assuming original 0.735",
+    "baseline": "",
+    "ratio": "",
+    "where": "computed from Tables 2-4"
+   },
+   {
+    "what": "PCIe bandwidth",
+    "value": "BuddyMoE about 20% less",
+    "baseline": "base",
+    "ratio": "0.8",
+    "where": "Fig 8 p.9"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "substitutes cached buddy experts on a prefetch miss",
+    "correct": "yes",
+    "true_value": ""
+   },
+   {
+    "claim": "up to 10% throughput",
+    "correct": "yes (10.3% at c=0.375)",
+    "true_value": "27.33 vs 24.78"
+   },
+   {
+    "claim": "negligible accuracy loss (abstract)",
+    "correct": "no",
+    "true_value": "ARC -5.4% to about -14% relative in own tables"
+   },
+   {
+    "claim": "first pass: ARC 0.695 vs 0.735 (-5.4% rel)",
+    "correct": "yes but pairs with the 7.4% row, not the 10.3% row",
+    "true_value": "10.3% row has ARC 0.645 (-12.2%)"
+   },
+   {
+    "claim": "PPoPP'26 per PDF metadata",
+    "correct": "unverified, not in text I read",
+    "true_value": ""
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU/PCIe stall model vs NVMe expert reads; needs a large resident share (25-62% of experts) for buddies to be resident, ours is 4-20 footprints of 24,576; lossy; 64-expert model, ARC only; offline calibration",
+  "quality_loss": "ARC avg 0.735 -> 0.695 (c=0.75), 0.635 (0.5), 0.645 (0.375) for BuddyMoE; random substitution 0.55/0.23/0.16",
+  "ablation": "tau/|B|/rho sweeps and random control; no cache vs layout vs prefetch isolation",
+  "limitations": "None stated in a dedicated section",
+  "contradicts_our_findings": "No.",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0118",
+  "title": "Janas-LLM: 37 tok/s From an 80B MoE on a 32GB Laptop (RunAIHome Team blog, 14 Oct 2026, reporting the Janas-LLM project by Maurizio Cammalleri)",
+  "id_read": "blog page HTML text; repo/wiki not opened",
+  "raw_text_read": true,
+  "setup": "Qwen3-Next-80B-A3B Q4_K_M 48.4GB (~1.8GB/token, 3B active); Core Ultra 9 185H, 32GB DDR5, NVMe ~5.7GB/s, Debian 13; O_DIRECT expert reads + ~19GB RAM expert cache; baseline llama.cpp b2b18470 Vulkan, llama-bench -p 1024 -n 16 -ngl 99 -t 12 (2.8 = CPU only, 2.0 with GPU); Janas figures from janas-bench",
+  "numbers": [
+   {
+    "what": "decode Qwen3-Next-80B",
+    "value": "24 tok/s",
+    "baseline": "llama.cpp 2.8",
+    "ratio": "8.6x",
+    "where": "blog table"
+   },
+   {
+    "what": "decode with MTP draft heads",
+    "value": "37 tok/s (64-token reply, 74-89% acceptance)",
+    "baseline": "24 without drafts",
+    "ratio": "1.54x",
+    "where": "blog"
+   },
+   {
+    "what": "decode Qwen3-30B-A3B / 35B-A3B (fit RAM)",
+    "value": "32 vs 15; 19 vs 12",
+    "baseline": "llama.cpp",
+    "ratio": "2.13x; 1.58x",
+    "where": "blog table"
+   },
+   {
+    "what": "prefill 80B",
+    "value": "62 tok/s",
+    "baseline": "16",
+    "ratio": "3.9x",
+    "where": "blog table"
+   },
+   {
+    "what": "derived hit bound",
+    "value": "SSD alone 5.7/1.8 = 3.2 tok/s so >=87% of expert bytes from the 19GB cache (39% of file)",
+    "baseline": "",
+    "ratio": "",
+    "where": "derived by me"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "24 tok/s vs llama.cpp 2.8 on same 32GB laptop",
+    "correct": "yes as blog claim; llama.cpp side is a 16-token CPU-only llama-bench",
+    "true_value": "8.6x"
+   },
+   {
+    "claim": "~19 GB expert cache",
+    "correct": "yes",
+    "true_value": "39% of 48.4GB"
+   },
+   {
+    "claim": "blog claim unverified",
+    "correct": "yes",
+    "true_value": "one developer, one machine"
+   },
+   {
+    "claim": "headline",
+    "correct": "catalog gives 24; blog headline title is 37 (with MTP)",
+    "true_value": ""
+   }
+  ],
+  "transfers": "no",
+  "why": "Cache is 39% of the file on 32GB DDR5 with 5.7GB/s NVMe and a 3B-active Q4 model; our 32GB case caches ~29% of a 69GB model with ~6B active; 16GB explicitly untested; x86 Linux only; no layout described so cannot support a layout claim; 8.6x exists only where stock mmap pages badly (1.3-2x when the model fits)",
+  "quality_loss": "None claimed (same Q4_K_M file); no verification shown",
+  "ablation": "None published in the blog (cache cap anecdote only)",
+  "limitations": "Blog/README: one tested machine, 'experiment not a product', GPU driver reset once, no macOS, 14-model catalog, 16GB untested, can swap-storm the desktop",
+  "contradicts_our_findings": "Not a contradiction; but C.md's 'compute-capped at 4.58 tok/s' is machine- and model-specific (this model has half the active bytes).",
+  "unread_reason": "Project repo and wiki not opened; blog only"
+ },
+ {
+  "method_row_id": "P-0119",
+  "title": "BigMoeOnEdge (GitHub Helldez/BigMoeOnEdge; Apache-2.0; created 2026-07-10, pushed 2026-10-29); catalog news article not found",
+  "id_read": "repo README, docs/limitations.md, benchmarks.md, prefetch.md, expert-prediction.md, cache-aware-substitution.md, bench-data findings, CHANGELOG",
+  "raw_text_read": true,
+  "setup": "Streaming layer on unmodified llama.cpp public API: expert cache, O_DIRECT/F_NOCACHE reads, --auto planner, optional lossy knobs (drop-cold-experts, expert-substitute, n-expert-used). README: Android 12GB DeepSeek V4 Flash 284B 91GB 1 tok/s, Flash-Next 125B 2-4, 35B 5; iPhone 12GB 35B 3; Apple laptop 16GB Flash-Next 125B 76GB 7-9, 35B 18-24; NVIDIA 16GB+32GB RAM 125B 19-21. 125B = 512 experts top-10 (~32.4GB routed experts of 66GB file, 450KiB/expert slice at Q2_0)",
+  "numbers": [
+   {
+    "what": "macOS F_NOCACHE vs buffered, external volume, unnamed model",
+    "value": "0.94 vs 0.61 tok/s",
+    "baseline": "buffered",
+    "ratio": "1.54x (+56%)",
+    "where": "docs/limitations.md"
+   },
+   {
+    "what": "macOS internal SSD, Qwen3.6-35B Q4_K_M, 4691MiB cache",
+    "value": "6.66, 6.97 vs 6.54, 6.46 tok/s",
+    "baseline": "buffered",
+    "ratio": "1.02-1.08",
+    "where": "docs/limitations.md"
+   },
+   {
+    "what": "rented 16GB GPU box, Flash-Next 125B Q2_0, 1024 tokens",
+    "value": "19.3-20.8 tok/s, 96-97% hits, 15.7GB RAM cache",
+    "baseline": "llama.cpp offload 16.6-18.9 (256 tok); Strata 50-66",
+    "ratio": "1.0-1.25x vs llama.cpp",
+    "where": "bench-data/2026-10-27-rented-16gb README"
+   },
+   {
+    "what": "prefetch variants same box",
+    "value": "prefetch 14.0/13.8; predict-prefetch 9.5; route-ahead 9.4",
+    "baseline": "no predictor 13.4-14.4 (256 tok)",
+    "ratio": "0.66-0.97",
+    "where": "same README"
+   },
+   {
+    "what": "LRU below one token cycle",
+    "value": "0.0% hits",
+    "baseline": "offline optimum 18-48%",
+    "ratio": "",
+    "where": "bench-data/2026-07-20-cache-replay/findings.md"
+   },
+   {
+    "what": "substitution L=0.15 Qwen3.6-35B, 2GB cache",
+    "value": "tok/s 3.84, hit 69.4%, ppl 4.4024; tinyMMLU 84/100; HumanEval 42/50 at 5.53 tok/s",
+    "baseline": "off: 2.366 tok/s, hit 48.8%, ppl 4.2352, 88/100, 42/50 at 2.36",
+    "ratio": "1.62x (gen), 2.3x (HumanEval run), ppl +3.9%",
+    "where": "bench-data/2026-08-26 findings"
+   },
+   {
+    "what": "substitution L=0.30",
+    "value": "ppl 5.36 / 5.32 with 45.7% / 41.9% reranked",
+    "baseline": "4.2352 / 4.4063",
+    "ratio": "+26.5% / +20.8%",
+    "where": "same"
+   },
+   {
+    "what": "gpt-oss-120b 12GB Android",
+    "value": "mmap 0.09 -> streamed 0.7 -> cache 2000MiB 1.3 -> k=2 2.2",
+    "baseline": "",
+    "ratio": "24x vs mmap",
+    "where": "docs/benchmarks.md"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "284B at 0.94 tok/s on a 12 GB phone",
+    "correct": "partly: README says 1 tok/s; a search snippet of the project gives 0.94; the only 0.94 in the docs I read is the unrelated macOS F_NOCACHE test; no per-run table found",
+    "true_value": "README row"
+   },
+   {
+    "claim": "with stock llama.cpp streaming experts from flash",
+    "correct": "partly: project's own streaming layer on unmodified llama.cpp, not llama.cpp's mmap",
+    "true_value": ""
+   },
+   {
+    "claim": "first pass: repo doc says no phone results exist",
+    "correct": "no: README lists Android/iPhone results; only iOS was simulator-only at limitations.md revision",
+    "true_value": ""
+   },
+   {
+    "claim": "first pass: 0.94 vs 0.61, 6.66-6.97 vs 6.46-6.54",
+    "correct": "yes",
+    "true_value": ""
+   },
+   {
+    "claim": "catalog url (letsdatascience) resolves",
+    "correct": "no/unfound",
+    "true_value": "UNREAD"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Most relevant row: same 125B/512-expert/top-10 model class streamed from flash on 16GB machines; breaks: GPU/Metal for dense compute, 2-bit quant (expert 450KiB vs our 2.7MB, ~6x more experts per byte of cache), README 7-9 tok/s row has no published run behind it, phone figures best-observed and thermally sensitive",
+  "quality_loss": "Lossless by default; lossy knobs measured: substitution L=0.15 ppl +0.9% to +3.9%, tinyMMLU -4/100, HumanEval equal; L=0.30 ppl +21-27%; k reduction and drop lose more (not read in detail)",
+  "ablation": "Extensive: cache size curves, prefetch/predict variants, mmap vs F_NOCACHE, drop/substitute on/off, device cache tier; layout not varied (repack off)",
+  "limitations": "n=1 only, no speculative decoding/batching with streaming, streamed experts on CPU, shared experts resident, repack must be off, macOS F_NOCACHE is a hint, Windows throughput lower",
+  "contradicts_our_findings": "Gives the first quality bound for the cache-aware substitution lever (B.md had it unmodelled); shows 125B at 7-9 tok/s (README) and 19-21 tok/s above our modelled 4.57 CPU ceiling at 2-bit with GPU; confirms LRU cliff and that read-ahead loses when flash bandwidth is saturated.",
+  "unread_reason": "letsdatascience news article not found (WebSearch); Janas/other forks not used"
+ }
+]

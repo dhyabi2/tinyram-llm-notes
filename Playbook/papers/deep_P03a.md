@@ -1,0 +1,320 @@
+# Deep re-check, batch P03a (raw full text; rows P-0055..P-0068 of P03)
+
+Work folder (raw PDFs/text): <scratch> All 12 rows read from raw text; 0 unread. Remembered facts are labelled 'from memory'.
+
+## P-0055 (s1 #8): Cache-Aware Joint Router Adaptation for Memory-Efficient MoE Inference (Zhenhe Wu, Yaping Jin, Qinghua Xing, Hang Zhou, Wei He, Xianjie Wu, Xianfu Cheng, Jian Yang, Hanting Chen; Huawei / Beihang / others; arXiv v2, 10 Sep 2026)
+
+- Read: arXiv:2609.04895v2 (PDF, full text); raw text read: True
+- Setup: Models: Qwen3-30B-A3B-Instruct-2507 (48 layers, ~30.5B total / 3.3B active, 128 experts/layer, top-8) and GPT-OSS-20B (24 layers, ~21B / 3.6B, 32 experts/layer, top-4) -- NOTE the paper uses GPT-OSS-20B, not 120B. Hardware: 8-accelerator node, 140 GB device memory each (training/eval); no latency measured at all. Metrics come from a trace-driven simulator synchronised with greedy decoding (hit rate, load-adjusted hit, MB of expert traffic per decode token; prefill transfers excluded). Cache: B=20 of 128 experts per layer for Qwen3 (15.6 %), B=8 of 32 for GPT-OSS (25 %). Batch 1 per device. Tasks GSM8K, MATH, CommonsenseQA (validation). Baselines: LRU/LFU/LRFU run on matched LM-only post-trained backbones; prefetchers Least-Stale (SpecMD), ProMoE, FineMoE, Temporally-Extended MoE. Method needs 4 epochs of post-training of the backbone plus auxiliary routers (12.6M extra params for Temporal Router on Qwen3, 25.2M for full mode).
+- Numbers:
+  - Qwen3 GSM8K hit rate, Temporal Router (update-only): 73.13 % | baseline: LRU 61.19 % (LFU 59.99, LRFU 62.67) | ratio: +11.94 points (1.20x) | where: Table 1 p5
+  - Qwen3 GSM8K load MB/token, Temporal Router: 974 | baseline: LRU 1407 | ratio: 0.69x (-30.8 %) | where: Table 1 p5
+  - Qwen3 GSM8K hit, full Spatio-Temporal Router: 90.62 % (adj. hit 69.03) | baseline: LRU 61.19 | ratio: +29.43 points | where: Table 1/2
+  - Qwen3 GSM8K load MB/token, full mode: 1474 | baseline: LRU 1407 | ratio: 1.05x MORE traffic than LRU (prefetch traffic counted) | where: Table 1
+  - Qwen3 CSQA load, Temporal Router: 304 | baseline: LRU 1579 (best classical 1512) | ratio: 0.19-0.20x | where: Table 1
+  - Accuracy GSM8K, full mode: 83.40 | baseline: LM-only 85.44 | ratio: -2.04 points | where: Table 1; Table 2
+  - Accuracy CSQA, full mode: 84.11 | baseline: LM-only 87.39 | ratio: -3.28 points | where: Table 1
+  - Accuracy Temporal Router GSM8K / MATH / CSQA: 85.44 / 57.82 / 86.16 | baseline: 85.44 / 58.22 / 87.39 | ratio: 0 / -0.40 / -1.23 points | where: Table 1
+  - Cache-loss weight sw=2.0 (Temporal): hit 88.44, load 419, acc 74.60 | baseline: LRU hit 61.19, acc 85.44 | ratio: -10.84 acc points | where: Table 2 p7
+  - Cache size B=12/20/30 of 128, Temporal hit: 62.91 / 73.13 / 80.00 % | baseline: - | ratio: - | where: Table 3 p8
+- Catalog / first-pass numbers:
+  - Qwen3-30B-A3B-Instruct-2507, 128 experts, top-8 -> yes: also GPT-OSS-20B (32 experts, top-4)
+  - trained auxiliary routers -> yes: also the MoE backbone is post-trained (joint adaptation); auxiliary-only gives hit 63.01 (+1.82) only (Table 2)
+  - 'search snippet gave no throughput numbers' -> yes: paper has no latency/throughput at all; only simulated MB/token (Sect. 4.1 'not end-to-end latency')
+  - first-pass: GSM8K hit 61.19 -> 73.13/90.62 -> yes: Table 1/2
+  - first-pass: load 1407 -> 974/1474 -> yes: but 1474 is HIGHER than LRU 1407; only the update-only mode reduces traffic
+  - first-pass: accuracy -2.04 GSM8K, -3.28 CSQA (full) -> yes: Table 1
+  - first-pass: setting '8-accelerator node, GPT-OSS'  -> partly: GPT-OSS-20B; cache 20/128 is for Qwen3 only (8/32 for GPT-OSS)
+- Transfers to our regime: no. Needs post-training of the model (retraining required), so it cannot apply to a fixed 125B checkpoint; no latency measured (simulator MB/token); cache is 15.6 % of experts per layer (about 2.5 footprints on a top-8/128 model), the same order as our 8-32 GB cases but only simulated; GPU-class host, batch 1 per device. The idea (learn same-layer retention so the same experts recur) is the 'router fine-tuned for temporal stickiness' family, and it reports the price: concentration of expert use (top-8 mass 36.8 -> 48.6 % at sw 0.1->2.0).
+- Quality loss: Temporal Router sw=0.1: GSM8K 0, MATH -0.40, CSQA -1.23 points; full mode -2.04 / -0.56 / -3.28; large sw: -10.84 GSM8K at sw=2.0. GPT-OSS-20B: accuracy mixed (GSM8K 61.87->63.99/64.52, MATH 43.74->43.74/42.46).
+- Ablation: Yes: auxiliary-only (frozen backbone) vs joint (Table 2): hit 63.01 vs 73.13; temporal-only vs spatio-only vs full; B and R sweeps (Table 3); sw sweep. Isolates the benefit of changing the model itself (+10 points hit over a frozen model with learned retention).
+- Limitations (authors): Stated: metrics are coverage/traffic not latency; each B uses a separate checkpoint (effects include model adaptation); baselines are different complete configurations rather than policies on an identical trace (Sect. 4.1); GPT-OSS results mixed/task dependent.
+- Versus our findings: No contradiction. Consistent with the idea that gains need model change; its LRU hit of ~61 % at 15.6 % cache on Qwen3 is in the range of our LRU numbers on the same model family (our 0.56 at 2.1 footprints = 13 % of pairs, B.md s1 #8).
+
+## P-0056 (s1 #8): llama.cpp Discussion #23324 'RFC+PoC: MoE offload to disk with on-demand paging' (author kisasexypantera94, 19 May 2026; later comments 28 May - 20 Aug 2026)
+
+- Read: GitHub discussion HTML (curl), all 38 comment blocks read; raw text read: True
+- Setup: Original post: Qwen3-30B-A3B-Q6_K (128 experts/layer, 48 layers) on M3 Pro 36 GB; Metal; compact per-layer pool of N slots in shared memory, LRU resolved by a CPU sidecar thread, misses read from the GGUF with pread; needs --no-mmap, --no-warmup, and -ub * n_expert_used <= n_slots (the run used -ub 10). Exact inference. Informal single measurements, 'after warmup'. Comments add: (a) koren1712, 4 Jul 2026: Windows/CUDA, i7-8700K, RTX 4080 16 GB, 32 GB DDR4-2666, NVMe 2.98 GB/s, GLM-4.5-Air Q4_K_M 73.5 GB; (b) jerryjokesalot, 19 Aug 2026: M1 MacBook Air 16 GB CPU/Accelerate C benchmark, Qwen3-30B-A3B f16 experts, SSD 3+ GB/s.
+- Numbers:
+  - Qwen3-30B-A3B-Q6_K tok/s, vanilla: 38.1 | baseline: - | ratio: 1.00x | where: OP table
+  - 128 slots (all experts): 30 | baseline: vanilla 38.1 | ratio: 0.79x | where: OP table
+  - 96 / 80 / 64 slots: 30 / 29.1 / 27.5 | baseline: 38.1 | ratio: 0.79 / 0.76 / 0.72x | where: OP table
+  - 32 slots: 22.1 | baseline: 38.1 | ratio: 0.58x | where: OP table
+  - 16 slots: 15.7 | baseline: 38.1 | ratio: 0.41x | where: OP table
+  - 8 slots: 12 | baseline: 38.1 | ratio: 0.31x | where: OP table (wired memory 6.3 GiB vs 27.2)
+  - author UPDATE: M1 Pro 16 GB: 13 tok/s | baseline: - | ratio: - | where: OP, slot count not stated
+  - koren1712 GLM-4.5-Air, 73.5 GB file, 32 GB RAM, RTX 4080: 0.43 (mmap baseline) -> 0.66 (12-worker async read pool) -> 0.68 (+IO/compute overlap) -> 0.75 (+blocks 0-3 pinned in VRAM) | baseline: 0.43 | ratio: 1.53x / 1.58x / 1.74x | where: comment table
+  - koren1712 16 GiB zero-copy slab cache: 0.60 t/s, reads cut 132 -> 76 GB/run | baseline: 0.68 | ratio: 0.88x (slower despite 42 % fewer bytes) | where: comment
+  - koren1712 24 GiB RAM tier on 32 GB machine: 0.12 t/s | baseline: 0.43 | ratio: 0.28x (memory-pressure collapse) | where: comment
+  - koren1712 read rate: 2.80 GB/s overlapped 16 MiB reads vs 377 MB/s via mmap paging; bytes/token 4.13 GB (3.82 with 4 blocks in VRAM) | baseline: - | ratio: 7.4x read rate | where: comment
+  - jerryjokesalot calibrated pin: hit rate: random profile 6 %, 10-token calibrated pin of top-8/layer 42 %, oracle top-8 45 %, calibrated+LRU 56 %, oracle top-32/layer 88 % | baseline: - | ratio: - | where: comment table
+  - jerryjokesalot pipelined I/O, M1 Air CPU, f16 experts: 0 % hit 1.43 tok/s; 50 % 2.40; 75 % 3.81; 88 % 4.10; 100 % 4.45 (sequential: 1.53/2.20/2.92/3.47/4.46) | baseline: - | ratio: pipelined/sequential 1.09x@50, 1.30x@75, 1.18x@88 | where: comment; per-layer compute 4.7 ms; 'projected not benchmarked' for Q4
+- Catalog / first-pass numbers:
+  - 'Expert slot pool with misses read from the GGUF' -> yes: pread into Metal shared slots, LRU
+  - 'no routing bias in the thread' -> yes: no bias; only LRU (author says SLRU gave no improvement, 28 May)
+  - first-pass: vanilla 38.1; 32 slots 22.1; 8 slots 12 -> yes: also 128 slots = 30, i.e. the mechanism itself costs 21 % at full residency
+  - first-pass: '30B file fits page cache' -> partly: Q6_K expert weights ~27 GiB wired on a 36 GB machine: the file mostly fits RAM so pread is largely page-cache copies, not NVMe reads; inference of the 16 GB case (13 tok/s) not described
+  - first-pass: 'calibrated pin from 10 tokens gives 42 % hit vs 6 % random' -> yes: 42 % is the top-8/layer pin (6.25 % of experts); oracle top-8 45 %
+- Transfers to our regime: partly. Engineering evidence, not an experiment: Metal GPU, Qwen3-30B Q6_K nearly fitting RAM, informal single runs. Slot-pool-below-RAM behaviour (8-32 slots = 6-25 % of experts) is relevant to our cache sizes. The koren1712 comment is the closest real data point to our regime (NVMe streaming of a 73.5 GB MoE file on 32 GB RAM, GPU only 16 GB): 0.43 -> 0.75 t/s and a collapse when 24 GiB of RAM is pinned. It is GPU-assisted (RTX 4080) and 4.1 GB/token (GLM-4.5-Air activates far more bytes/token than a 4.3-bit 125B top-10), so bytes/token, not cache, is the wall. Calibrated pinning supports our measured numbers (see below).
+- Quality loss: None (exact inference); no routing bias.
+- Ablation: Slot-count sweep (8..128). Comment: variant ladder for streaming (async pool, overlap, VRAM pin of 4 blocks, slab cache, RAM tier). Calibrated pin vs LRU vs combined in jerryjokesalot's table.
+- Limitations (authors): Author: requires --no-mmap/--no-warmup, ub*n_used<=n_slots; MoE sparsity not guaranteed (DS4 knowledge distributed more uniformly); LRU is just one strategy. koren1712: PCIe 3.0 flatlines ~2.4 GB/s; pinning >=24 GiB on 32 GB machines collapses. Informal single-run data throughout.
+- Versus our findings: Consistent with ours. Calibrated 10-token pin 42 % at 6.25 % share matches our in-sample pin 0.406 at 6 % share (W=64, B.md s1 #10) and oracle top-32 88 % (25 % share) is above our 0.53 learned-on-other-prompts pin at 24.5 % (we found cross-prompt pins weak, same-prompt pins strong). Their 'calibrated+LRU 56 %' is a combined number we did not measure at that share. Their slot-count result that 32 slots cost 0.58x on a GPU box with all experts in page cache shows the policy overhead, which our model does not charge.
+
+## P-0057 (s1 #8): SpecMD: A Comprehensive Study On Speculative Expert Prefetching (Duc Hoang, Ajay Jaiswal, Mohammad Samragh, Minsik Cho; Apple; arXiv 3 Feb 2026, preprint under review)
+
+- Read: arXiv:2602.03921v1 (PDF, full text); raw text read: True
+- Setup: Emulation framework on one A100 80 GB; GPU cache software-limited to 1/5/25 % of model size; transfers throttled to 5 GB/s; experts quantised int8/int4 (bitsandbytes) or int2 (HQQ). Models: OLMoE-1B-7B (16 layers, 64 experts, top-8, 12 MB/expert), Mixtral-8x7B (32 L, 8 E, top-2, 336 MB), Qwen1.5-MoE-A2.7B (24 L, 60 E, top-4, 16.5 MB), Phi-3.5-MoE (32 L, 16 E, top-2, 150 MB). Tasks GSM8K/TruthfulQA/NQ, 100 samples each; GPT-5 as judge. Four policy dimensions: routing, prefetching, eviction, miss handling. Proposed: Least-Stale eviction (protect experts accessed in the current forward pass, evict stale ones).
+- Numbers:
+  - collision miss reduction of Least-Stale vs LRU: up to 85x (abstract; at 1 % capacity), 2.6-8.6x at 5 % (Sect. 5.2), 10-34x lower collision rates (Fig. 8 caption), '3-9x' (conclusion) | baseline: LRU collision rates 4.5-12.6 % at 5 %; LS 1.6-1.9 %; Score-Based 42.6-60.9 % | ratio: internally inconsistent headline; 85x not in body text | where: Abstract; Sect. 5.2 p7; Fig. 8
+  - TTFT improvement of Least-Stale as drop-in on OLMoE: 10.7-34.7 % | baseline: Eliseev'23 3076.8 -> 2748.1 ms; Zhu'25 2257.2 -> 1473.1; HOBBIT 1590.1 -> 1309.2; MixtureCache 2664.6 -> 2297.5 | ratio: 0.89 / 0.65 / 0.82 / 0.86x TTFT | where: Table 2 p17
+  - Table 2 other models: Mixtral 9.8-25.7 %, Phi-3.5 -4.3 % (worse) to 44.1 %, Qwen1.5 4.3-23.0 % | baseline: - | ratio: - | where: Table 2
+  - Table 1 OLMoE 4-bit 5 % cache: Config5 (Score prefetch + LS) TTFT / tok/s: 2220 ms / 1.69 | baseline: 8-bit baseline 3166 ms / 1.5; Config1 (Eliseev) 3077 / 1.91 | ratio: 0.70x TTFT vs baseline; tok/s 1.13x vs baseline but 0.88x vs Config1 | where: Table 1 p10
+  - Table 1 Mixtral Config5: 3044 ms / 1.42 tok/s; GSM8K 0.528 | baseline: baseline 8-bit 10296 ms / 0.4 tok/s, GSM8K 0.569 | ratio: 0.30x TTFT, 3.55x tok/s, -4.1 pts GSM8K | where: Table 1
+  - hit rate at 5 % (0.6 GB) OLMoE: >88 % (abstract) | baseline: - | ratio: - | where: Abstract; Fig 1
+  - miss handling: Fetch Priority: OLMoE 4-bit near-baseline (0-5 % loss), 20-30 % speed-up; Mixtral 8-bit 10-12 % perf improvement w/ 50-60 % speed gains | baseline: - | ratio: - | where: Sect. 5.4
+  - Drop Priority quality: Qwen -25..-30 % performance; OLMoE -5..-15 % | baseline: - | ratio: - | where: Sect. 5.4
+  - cache-aware routing share of gains: 10-20 % of speed-up in some cases; lambda 0.1-0.5 best | baseline: - | ratio: - | where: Sect. 5.4
+- Catalog / first-pass numbers:
+  - 'Mixtral-offloading / SpecMD study of speculative prefetch' -> partly: SpecMD is a benchmark framework + Least-Stale eviction; Mixtral-offloading (Eliseev&Mazur) is only a baseline (Config 1)
+  - 'also covers routing bias toward cached experts through learned parameters' -> partly: cache-aware routing (Skliar et al. 2025, MixtureCache) is reproduced as a policy dimension with a bias lambda on logits (training-free, not learned), not a SpecMD contribution
+  - first-pass: 'up to 85x fewer collision misses (abstract) vs 2.6-8.6x (body)' -> yes: Fig. 8 caption says 10-34x; conclusion 3-9x
+  - first-pass: TTFT -10.7..34.7 % on OLMoE -> yes: Table 2; but one cell (Phi-3.5, Zhu'25) is -4.3 %
+  - first-pass: Apple, 3 Feb 2026 -> yes: 
+- Transfers to our regime: no. GPU (A100) emulation, 5 GB/s link, models with 8-64 experts, TTFT-dominated metrics, cache measured as share of ALL experts with a prefetcher. The one insight that transfers is the cyclic-scan pathology: with a cache below ~1 footprint a plain LRU thrashes inside a single forward pass (collision misses); Least-Stale protects the current pass. Our own LRU at 0.96 footprints is exactly 0.000 (B.md s1 #10), so a published eviction fix exists for the regime where we found a pin helpful (inference, not tested).
+- Quality loss: Not for the headline Least-Stale (lossless eviction). Lossy options: Drop priority -5..-30 %, Substitution score 'fails across all configurations' (GSM8K 0.073 / 0.037 / 0.027 / 0.008, Table 1 Config2), cache-aware routing lambda 0.1-0.5 trade-off.
+- Ablation: Yes: eviction x prefetch x miss-handling x routing grid (Fig. 4-9, Table 1-2); Least-Stale as drop-in on four prior systems.
+- Limitations (authors): Authors: 100 samples/task; emulated hardware; 'Configurations selected perform well in most cases but this is not the point' (platform paper); Least-Stale not helpful for all (Phi-3.5 + Zhu'25).
+- Versus our findings: Partly: abstract says expert access 'is not consistent with temporal locality (LRU, LFU)'; we measured LRU > pin at >=10 % share across decode tokens (B.md s1 #10), i.e. temporal locality exists across tokens. The two are reconcilable: SpecMD's complaint is within-pass layer-order thrash at tiny capacity (1-5 % of all experts, below one footprint), which is the cliff in our LRU row (0.000 at 0.96 fp).
+
+## P-0058 (s1 #8): Which Expert Misses Are Worth Waiting For? Substitution and Caching for Mixture-of-Experts Inference on a Consumer GPU (ChaeWoo Son, independent researcher; Research Square preprint v1, not peer reviewed; DOI 10.21203/rs.3.rs-11268552/v1)
+
+- Read: Research Square v1 PDF (70 pages, pdftotext full text) -- first pass could not load it; now READ; raw text read: True
+- Setup: Main model Qwen3-Next-80B-A3B Instruct: 48 layers, 10 of 512 routed experts + 1 shared (the same expert geometry as our target); Q4_K_M GGUF 48.5 GB (45.2 GiB file in the llama.cpp runs) in the engine, BF16 in the PyTorch emulation. Also DeepSeek-V4-Flash (6/256, 43 L) and gpt-oss-120b (4/128) in emulation only. Engine = llama.cpp patch: GPU slot cache (25 % = 128 slots/layer, 10.9 GiB; 15.7 GiB VRAM), misses read with O_DIRECT (or from page cache), substitution of misses by resident experts, rules: '0.15 rule' = fetch a miss synchronously only if it was the router's first choice or gate weight >= 0.15, else substitute; background admission when accumulated substituted mass >= 0.5; frequency eviction. Hosts: RunPod RTX 3090 24 GB (and A40), 6-32 vCPUs, NVMe 2.9-6.1 GB/s O_DIRECT; speed comparison R13: RTX 3090, Fanxiang S880 PCIe 4.0 5.7 GB/s, 16 threads, container RAM 57.7 GiB with 'ample', ~32 GB and ~16 GB available (made by other processes holding 25 and 41 GiB). Quality by teacher-forced perplexity (6/24 sessions of 2,048 tokens, 6 domains) and a pre-registered greedy generation test on 500 GSM8K + 164 HumanEval. Batch 1.
+- Numbers:
+  - Emulation, 25 % cache: ppl increase, substitute every miss: +5.67 % (KL 0.085) | baseline: original model | ratio: - | where: Table 2 p10
+  - Emulation, 25 % cache: ppl increase, 0.15 rule: +0.35 % (KL 0.013), substitution rate 7.5 % | baseline: substitute-all 5.67 % | ratio: 16x less ppl loss | where: Table 2
+  - Engine 24 sessions: ms/token, fetch every miss vs 0.15 rule: 12.84 ms (+1.21 % ppl [0.73,1.69]) | baseline: 36.11 ms | ratio: 2.81x | where: Table 5 p15 (R18 host: 3090, 5.8 GB/s)
+  - Engine topic-change sequences: 10.55 ms (+1.77 % ppl) | baseline: 26.46 ms | ratio: 2.51x | where: Table 5 (R19)
+  - quality-first / speed-first policies: 12.89 ms +0.67 %; 11.90 ms +1.00 % (single topic); 10.68/+0.97, 10.08/+1.46 (topic change) | baseline: fetch-every-miss 36.11 / 26.46 ms | ratio: 2.80 / 3.03x ; 2.48 / 2.62x | where: Table 5
+  - Decode speed vs stock llama.cpp, ~16 GB available RAM: engine 94.5 tok/s (page cache first), 89.3 tok/s (SSD only) | baseline: stock same-VRAM (14 of 48 layers' experts on GPU) 31.8 tok/s; stock all-experts-on-CPU 16.0 tok/s | ratio: 2.97x / 2.81x vs same-VRAM; 5.9x / 5.6x vs all-CPU | where: Table 8 p18
+  - Decode, ample RAM: 108.4 (page cache) / 89.4 (SSD only) | baseline: stock same-VRAM 72.9; all-CPU 59.0 | ratio: 1.49x / 1.23x ; 1.84 / 1.52x | where: Table 8
+  - Decode, ~32 GB: 97.8 / 89.8 | baseline: stock same-VRAM 65.8; all-CPU 42.9 | ratio: 1.49x / 1.36x | where: Table 8
+  - Time to answer (128/512/1536-token prompt), ~16 GB RAM: 4.1/4.8/5.5 s (page cache); 4.6/5.6/6.3 s (SSD only) | baseline: stock same-VRAM 13.9/19.9/22.3 s | ratio: 3.4/4.1/4.1x ; 3.0/3.6/3.6x | where: Table 8
+  - Time to answer, ample RAM, SSD only: 4.6/5.6/6.2 s | baseline: stock same-VRAM 4.3/4.8/5.3 | ratio: 0.94/0.87/0.85x (SLOWER than stock) | where: Table 8
+  - Engine perplexity vs stock (0.15 rule, R13): 5.5405 | baseline: stock 5.4526 (same VRAM) | ratio: +1.6 % | where: Sect. 6.2 p19
+  - Generation accuracy GSM8K (500) vs fetch-every-miss E 93.8 %: Q 94.2 (+0.4 [-1.4,2.0]); S 93.6 (-0.2); T=0.15 rule alone 92.0 (-1.8 [-3.6,0.0], McNemar p=0.093); C first-choice 90.4 (-3.4); H first-choice at 12.5 % cache 85.4 (-8.4) | baseline: E 93.8 | ratio: - | where: Table 9 p20
+  - HumanEval (164) vs E 93.9 %: Q 92.7 (-1.22); S 93.3 (-0.61); T 94.5 (+0.61); C 93.3; H 91.5 (-2.44) | baseline: E 93.9 | ratio: - | where: Table 9
+  - Time per generated token on four pods: speed-first 3.8-9.4 % less than 0.15 rule; 0.15 rule 13.98-15.54 ms/token | baseline: - | ratio: - | where: Table 7 p17
+- Catalog / first-pass numbers:
+  - '2.8-3.0x decode vs stock llama.cpp on an RTX 3090 with about 16 GB RAM' -> yes: decode tok/s ratio 2.81-2.97x vs stock llama.cpp configured for the same VRAM (stock with all experts on CPU: 5.6-5.9x); 1.2-1.5x with ample RAM; on a different host 4.3 GB/s the ratios differed (time-to-answer 4.1/2.6/3.1x)
+  - 'about 16 GB RAM' -> partly: 16 GB 'available' was emulated by other processes holding 41 GiB of a 57.7 GiB container, not a 16 GB machine; paper warns real PCs may see smaller gain
+  - 'quality depends on which experts are fetched' -> yes: the central finding: first-choice/heavy misses must be fetched; substituting only light experts costs +0.35 % ppl vs +5.7 % when substituting everything
+  - first-pass: setting 'unverified' -> wrong (now resolved): see setup; model is Qwen3-Next-80B-A3B 512 experts top-10
+  - (the catalog's 2.8-3.0x is for the 0.15 rule alone; quality-first/speed-first policies were NOT compared to stock) -> absent: paper limits box states it
+- Transfers to our regime: partly. Same expert geometry as our target (512 experts, top-10, 48 layers, ~Q4 GGUF 48.5 GB) and the first paper in this batch with batch-1 llama.cpp numbers and NVMe reads (5.7 GB/s O_DIRECT). But: (1) attention and the resident 25 % expert cache are on an RTX 3090 (15.7 GiB VRAM) and stock baseline also has GPU; in our CPU-only regime the baseline is a CPU run, and the 'miss' cost is a disk read of an expert (1.9 MB for the Q4_K_M expert) followed by CPU compute, not a PCIe copy; (2) the cache is 25 % of experts in VRAM (we have about 2-8 token footprints of expert RAM, i.e. a few percent of the 24.6k expert slices of the 125B); (3) substitution is lossy (+1.2-1.8 % ppl, up to -1.8 GSM8K points for the 0.15 rule alone, -8.4 at 12.5 % cache); (4) teacher forcing with ample page cache confounds. What does transfer: the quality side of substituting misses, measured on a 512-expert top-10 model: only about 7.5 % of expert calls are substituted at 25 % cache and mass (summed gate weight of substituted experts) 0.056-0.21 depending on test; gate-weight threshold is a usable quality guard for cache-aware routing in our family.
+- Quality loss: Teacher-forced ppl +0.35 % (idealised emulation) / +1.21 % (engine, 0.15 rule) / +0.67 % (quality-first policy) at 25 % cache; 12.5 % cache first-choice rule +3.61 %; generation accuracy GSM8K -1.8 points (0.15 rule alone, CI touches 0), +0.4 / -0.2 for Q / S; HumanEval within -2.44..+0.61. Mass correlates with ppl (0.77 on 6, 0.92 on 24 sessions).
+- Ablation: Yes: substitute-all vs first-choice vs 0.15 rule (Table 2/3); frequency eviction, background admission (beta 0.5), per-layer slot allocation (Sect. 6.1); SSD-only vs page-cache-first read path (Table 8); RAM conditions. Cache vs layout vs prefetch is NOT isolated; they state they did not compare with prefetching or lower-precision copies.
+- Limitations (authors): Stated: one model, mostly 25 % cache; quality mainly teacher-forced ppl; only the generation test and Experiment B were pre-planned; two conclusions reversed when the sample grew 6 -> 24; speed differs 24-41 % across hosts; one machine for the stock comparison; baseline is a single stock config; RAM conditions artificial; no comparison to prefetching or KTransformers/Fiddler; Experiment B reached no judgment; the page-cache-first gain may come from the engine's own loading.
+- Versus our findings: No. It supports our family s1 #8 claim that substituting heavy misses costs quality and that gains need a threshold; but it contradicts our assumption that cache-aware routing must change ~12-42 % of the router's choices (our B.md: LRU 0.56 -> 0.79 changes 24 %): here only 7.5 % of calls are substituted at 25 % cache, and fetching the heavy ones keeps ppl near +1 %. That suggests a gate-weight-guarded bias (fetch if first choice or weight >= 0.15) is a cheaper quality guard than the plain top-k swap we modelled.
+
+## P-0060 (s1 #9): SeqMoE: Toward Full-Load Performance via Predictive and Graph-Compatible MoE Offloading (Zihan Wang, Yuqi Wang, Lei Gong, Cheng Tang, Wenqi Lou, Teng Wang, Chao Wang, Xuehai Zhou; USTC / Suzhou Institute; arXiv 11 Sep 2026)
+
+- Read: arXiv:2609.12978v1 (PDF, full text); raw text read: True
+- Setup: Models: Qwen3-30B-A3B-FP8 (8/128), Qwen3.6-35B-A3B-BF16 (8/256), GPT-OSS-120B-MXFP4 (4/128, 115B MoE params), DeepSeek-V4-Flash (6/256, 277B MoE params). Hardware: RTX 4090 24 GB + Xeon Gold 6430 + 120 GB host RAM, PCIe 4.0 (Qwen3-30B); RTX 5090 32 GB + Xeon 8470Q + 120 GB, PCIe 5.0 (Qwen3.6); RTX PRO 6000 Blackwell 96 GB + 256 GB, PCIe 5.0 (GPT-OSS, DSV4). All experts reside in host DRAM, none on disk. Batch 1 (main), small batches in one row. Residency 15-45 % of experts in GPU. Baselines: llama.cpp, MoE-Infinity (only first group), KTransformers, FreeToken (concurrent, LRU), FullLoad (vLLM 0.26/0.28). Predictor: Mamba2 seq2seq trained on 45K traces (MATH, GSM8K, CodeForces, OpenOrca, ShareGPT), 8 recursive steps; joint prefetch scheduling (job sequencing with deadlines); probabilistic Belady eviction; CUDA-graph-compatible runtime.
+- Numbers:
+  - Hit rate averaged over 4 models, 45 % residency: 96.97 % | baseline: LRU 88.50 % (strongest baseline) | ratio: +8.5 points; miss rate 3.03 vs 11.5 % = 3.8x fewer misses | where: Sect. 9.3 p~13; abstract
+  - Hit rate at 15/25/35/40/45 %: 84.56 / 91.72 / 95.09 / 96.11 / 96.97 % | baseline: LRU 60.02 / 74.24 / 84.49 / 86.37 / 88.50 % | ratio: miss ratio 2.6x / 3.1x / 3.2x / 2.9x / 3.8x | where: Sect. 9.3
+  - Fraction of FullLoad decode performance, 45 % (40 % QW36), 128-1024 tokens: QW3 84.82, QW36 75.69, GPT 79.20, DSV4 76.65 %  (mean 79.09 %) | baseline: FullLoad = 100 %; FreeToken 55.15 / 57.60 / 45.45 % (QW36/GPT/DSV4); other baselines <=28.03 % | ratio: - | where: Fig. 6 / Sect. 9.2
+  - Abstract: 80.22 % of full-load at 45 %: 80.22 % | baseline: FreeToken 51.50 %, others <=28.03 % | ratio: does not equal the 79.09 % mean of the four text values (probably averages different sequence-length groups) | where: Abstract/Intro p3
+  - Fig. 1(b) Qwen3-30B-FP8 on RTX 4090, 45 % loaded, batch 1: SeqMoE (figure)  | baseline: eager 2.3 tok/s, MoE-Infinity 11.9 tok/s (read off figure text) | ratio: - | where: Fig. 1b p1
+  - Prefill: one layer overlaps only 1.39 experts transfer on 4090/PCIe4: 1.39 experts | baseline: - | ratio: - | where: Sect. 2.2
+- Catalog / first-pass numbers:
+  - 'Prefill rarely reaches full-load performance under offloading because many tokens activate a broad expert set' -> yes: Sect. 8.4 text, verbatim idea; it is an assertion, no measured coverage numbers in the paper's text
+  - 'chunked prefill causes repeated expert transfers' -> yes: Sect. 8.4: 'poorly suited to offloading because it incurs repeated expert transfers across chunks'; no number
+  - first-pass: GPT-OSS-120B etc. on 4090/5090/PRO 6000 -> partly: each model on ONE GPU (QW3 4090, QW36 5090, GPT+DSV4 PRO 6000)
+  - first-pass: 45% residency 96.97 % hit, 80.22 % of full-load (abstract) -> yes: but body values average 79.09 %
+  - first-pass: 'fix is popularity prefetch not expert-major' -> yes: prefill: offline per-expert frequency profile used to prefetch high-frequency experts for subsequent layers; num_slots-e kept in Fetch state, e slots reserved for misses; no graph capture in prefill
+- Transfers to our regime: partly. GPU, residency 15-45 % of ALL experts (vs our 2-8 footprints), all experts in host DRAM over PCIe (no NVMe), trained predictor on 45K traces, results reported mostly as figures. The only two sentences relevant to prefill (broad expert set; chunking re-transfers experts) are asserted not measured. The quantity that matters to us, a prefill where each expert is read once per layer, is handled by 'prefetch popular experts' not by expert-major order.
+- Quality loss: Lossless (no substitution).
+- Ablation: Yes (Sect. 9.3-9.5): predictor accuracy vs Patterns-MoE; prefetch scheduling vs alternatives; eviction (LRU/LFU/PrefillHot/Belady-8/probabilistic Belady) at 15-45 %. Prefill component not ablated separately.
+- Limitations (authors): Not given in a limitations section; authors note small-batch concurrency and long sequences only briefly; 'minor performance changes' for 4-8K sequences; models without enough GPU memory for 45 %.
+- Versus our findings: No contradiction. Their observed LRU hit at 25 % residency (74 %) is consistent with LRU being the strongest simple policy, as we measured (LRU > pin).
+
+## P-0061 (s1 #9): ExpertFlow (v1 title 'ExpertFlow: Optimized Expert Activation and Token Allocation for Efficient Mixture-of-Experts Inference'; v2 title 'ExpertFlow: Efficient Mixture-of-Experts Inference via Predictive Expert Caching and Token Scheduling'; Xin He, Shunkang Zhang, (Kaijie Tang in v2), Yuxin Wang, Haiyan Yin, Zihao Zeng, Shaohuai Shi, Zhenheng Tang, Xiaowen Chu, Ivor Tsang, Yew-Soon Ong; arXiv v1 23 Oct 2024, v2 2 Apr 2026)
+
+- Read: arXiv:2410.17954 v1 (PDF, full) and v2 (PDF, full); catalog URL points to v1; raw text read: True
+- Setup: v1: single NVIDIA A40 48 GB + Xeon Gold 6338; Mixtral-8x7B and Switch-32/64/128; WMT16 translation, XSUM summarisation; batch 4/8/16 (32 in the ablation), cache size CS in {1,3} fractions or 4-16 experts; baselines SE-MoE, Cache-MoE (Mixtral), Pregated-MoE, AIG (all-in-GPU), LRU. Components: transformer routing-path predictor (7.21 MB), predictive locality-aware expert cache (PLEC), token scheduler grouping tokens with similar predicted routes, dual-batch pipeline. v2 adds Qwen1.5-MoE and DeepSeek-MoE, Alpaca and AIME2024 datasets, a throughput (tokens/s) table.
+- Numbers:
+  - v1 abstract: GPU memory saving: up to 93.72 % (avg 75.4 %) | baseline: all-in-GPU | ratio: - | where: v1 abstract/Table 2
+  - v1: inference speed-up: 2 to 10x; peak 9.99x (WMT16) / 9.54x (XSUM) vs SE-MoE; avg 2.53x (Switch-32) -> 7.94x (Switch-128) | baseline: SE-MoE | ratio: - | where: v1 Fig. 7 p9
+  - v1: Mixtral-8x7B: 1.96x (WMT16), 1.99x (XSUM) | baseline: Cache-MoE | ratio: - | where: v1 Fig. 8
+  - v1: hit ratio: up to 91.96 %; '+27.65 % on average over LRU' | baseline: LRU (Fig. 9, Switch-32 CS=8..16: 91.96 vs 76.61, 86.35 vs 65.62...) | ratio: ambiguous whether relative or percentage points; Fig. 9 gaps are 15-36 points | where: v1 intro; Fig. 9
+  - v1 Table 3 token scheduler speed-up: Switch-32 1.09x, Switch-64 1.19x, Switch-128 1.16x (avg 1.15x, max 1.19x) | baseline: ExpertFlow w/o TS = 1x | ratio: avg of three 1.147x | where: v1 Table 3 p10 (CS=16, BS=32)
+  - v2 Table 2 token scheduler throughput: Switch-32 881.91 tok/s, Switch-64 788.30, Switch-128 735.35 | baseline: w/o TS 854.19, 680.72, 628.36 | ratio: 1.03x, 1.16x, 1.17x (text 1.03/1.15/1.17) | where: v2 Table 2 (Sect. 4.4.2)
+  - v2 speed-ups over SE-MoE (CS=16, BS=32): Switch-32/64/128 2.01x, 3.19x, 5.86x; 9.99x at CS=4 on Switch-128; vs Cache-MoE up to 1.99x Mixtral, 2.12x Qwen1.5, 1.94x DeepSeek-MoE | baseline: SE-MoE / Cache-MoE | ratio: - | where: v2 Sect. 4.3
+  - v2 hit ratio Switch-32 CS=16: 91.90 -> 85.91 % as BS 4 -> 16 | baseline: LRU 76.61 -> 58.37 %; CS=8/BS=16 71.89 vs 36.22 % | ratio: - | where: v2 Sect. 4.4.1
+- Catalog / first-pass numbers:
+  - 'Groups tokens with similar routes to minimise expert loads per batch and maximise tokens per expert' -> yes: token scheduler; designed for batches (the paper's own examples use batch 4-32)
+  - first-pass: 2-10x vs baselines -> yes: v1 abstract; baselines SE-MoE/Cache-MoE etc, not llama.cpp
+  - first-pass: token scheduler avg 1.15x (max 1.19x) -> yes (v1 only): v2 reports 1.03 / 1.15 / 1.17x -> mean 1.12x
+  - first-pass: hit +27.65 % vs LRU -> partly: v1 phrase; ambiguous points vs relative
+  - first-pass: Mixtral, Switch-32/64/128; A40; batch 4-32 -> yes: v2 adds Qwen1.5-MoE and DeepSeek-MoE
+- Transfers to our regime: no. GPU (A40), batch >= 4 (scheduler needs many tokens to group), hundreds of experts only in Switch (encoder-decoder, top-1), CPU memory for offload not NVMe. At batch 1 there is nothing to group. Our related family (decode k tokens of one sequence as a group) is a different regime.
+- Quality loss: Lossless for the scheduler; predictor misprediction corrected at runtime.
+- Ablation: Yes: PLEC vs LRU (Fig. 9), token scheduler on/off (Table 3 v1 / Table 2 v2), predictor accuracy vs TLP/SLP (Table 1), memory vs batch/cache (Table 2).
+- Limitations (authors): Authors list limited baseline compatibility with Mixtral (only Cache-MoE compared); sensitivity of small models (Switch-32) to cache/batch; v2 adds Discussion; speed-up reported as relative ratios, absolute tok/s only in v2.
+- Versus our findings: No. Scheduler gain 1.03-1.19x at batch 32 is small even in the favourable regime; supports not expecting much from route-grouping at small batch.
+
+## P-0062 (s1 #9): MoE-Lightning: High-Throughput MoE Inference on Memory-constrained GPUs (Shiyi Cao, Shu Liu, Tyler Griggs, Peter Schafhalter, Xiaoxuan Liu, Ying Sheng, Joseph E. Gonzalez, Matei Zaharia, Ion Stoica; UC Berkeley/Stanford; arXiv 18 Nov 2024)
+
+- Read: arXiv:2411.11217v1 (PDF, full text; the first pass saw only the abstract); raw text read: True
+- Setup: Models Mixtral 8x7B, 8x22B, DBRX (132B, 16 experts). Hardware: S1 1xT4 16 GB + 24-core Xeon 2.3 GHz 192 GB; S2 1xL4 24 GB + 192 GB; S6 2xT4 and S7 4xT4 + 416 GB (8x22B); S8/S9 2/4xT4 (DBRX). Weights live in CPU DRAM (all experts); CPU GQA attention kernels (MKL); workloads MTBench (gen 32-256), HELM synthetic reasoning and summarisation. Baselines FlexGen, FlexGen(c) (CPU attention), DeepSpeed ZeRO-Inference 0.14.3. Metric: generation throughput including prefill, maximum over batch policy (large batches).
+- Numbers:
+  - up to 10.3x throughput: MoE-Lightning (unpadded) vs best baseline, S1 and S2, MTBench | baseline: FlexGen / FlexGen(c) / DeepSpeed | ratio: 10.3x | where: Fig. 7 caption and Sect. 5.2 p9
+  - MoE-Lightning(p) (padded, like-for-like) single GPU: up to 3.5x / 5x / 6.7x | baseline: FlexGen / FlexGen(c) / DeepSpeed | ratio: 3.5x, 5x, 6.7x | where: Sect. 5.2
+  - Fig. 7 MTBench S1 example: values read: MoE-Lightning(p) 33.9 tok/s etc. | baseline: FlexGen 9.6-12.2 | ratio: ~3.5x | where: Fig. 7 (text extraction)
+  - HELM summarisation S1: MoE-Lightning(p) 4.52 tok/s | baseline: FlexGen 3.868, FlexGen(c) 2.614, DeepSpeed 0.965 | ratio: 1.17x / 1.73x / 4.7x | where: Table 4 p9
+  - HELM synthetic reasoning S2: 105.29 | baseline: FlexGen 50.138, FlexGen(c) 20.015, DeepSpeed 18.589 | ratio: 2.1x / 5.26x / 5.7x | where: Table 4
+  - 4xT4 vs 2xT4 scaling on 8x22B: 2.77-3.38x | baseline: 2xT4 | ratio: super-linear | where: Sect. 5.3
+  - CPU memory need: 2-3x less CPU memory to reach same throughput bound | baseline: - | ratio: - | where: Abstract
+- Catalog / first-pass numbers:
+  - 'up to 10.3x throughput vs offloading baselines on Mixtral 8x7B / T4' -> partly: 10.3x is for the unpadded variant vs FlexGen on S1/S2 (T4 and L4); like-for-like padded comparison is 3.5x (vs FlexGen), 5x, 6.7x; HELM tasks 1.17-2.1x vs FlexGen
+  - 'throughput of large batches, not single-prompt TTFT' -> yes: batched offline throughput; policy chooses N and micro-batch mu
+  - 'paged weights' -> partly: weights are paged for pipelined CPU->GPU transfer; this is unrelated to OS page cache
+- Transfers to our regime: no. GPU (T4/L4), batch size in the hundreds/thousands (throughput mode), model fully resident in 192-416 GB CPU DRAM, CPU attention. Our regime is batch 1 from NVMe with 8-32 GB RAM. The HRM roofline idea (balance CPU, GPU, I/O) could inform a model but nothing here measures SSD.
+- Quality loss: Lossless.
+- Ablation: Yes (Sect. 6.3): CGOPipe vs not; HRM-found policy vs fixed; bottleneck analysis. Not cache vs layout vs prefetch.
+- Limitations (authors): Authors note variable prompt length and padding variants, throughput-oriented only; attention on CPU becomes bottleneck at long prompts/generation lengths.
+- Versus our findings: No.
+
+## P-0063 (s1 #9): Taming Latency-Memory Trade-Off in MoE-Based LLM Serving via Fine-Grained Expert Offloading (FineMoE; v1 title 'fMoE: Fine-Grained Expert Offloading for Large Mixture-of-Experts Serving'; Hanfei Yu, Xingqi Cui, Hong Zhang, Hao Wang, Hao Wang; EuroSys '26, 27-30 Apr 2026, DOI 10.1145/3767295.3769319; arXiv v1 7 Feb 2025, v2 4 Oct 2025)
+
+- Read: arXiv:2502.05370 v2 and v1 (both full PDFs); raw text read: True
+- Setup: Six-GPU testbed, 6 x RTX 3090 24 GB (NVLink pairs, PCIe 4.0 32 GB/s), Threadripper PRO 3955WX 32 cores, 480 GB CPU memory. Models Mixtral-8x7B, Qwen1.5-MoE, Phi-3.5-MoE. Datasets LMSYS-Chat-1M and ShareGPT; mean input 37/43 and output 127/122 tokens; 64 prompts averaged; batch 1 for the main figure, batch 1-8 sensitivity. Baselines MoE-Infinity, ProMoE (own re-implementation on top of MoE-Infinity, not open source), Mixtral-Offloading, DeepSpeed-Inference (re-implemented in MoE-Infinity code base). Experts in host DRAM; the system stores 'expert maps' + semantic embeddings of earlier prompts and uses them to guide prefetch distance d=3.
+- Numbers:
+  - v2 average TTFT reduction: 74 / 67 / 56 / 53 % | baseline: DeepSpeed-Inference / Mixtral-Offloading / ProMoE / MoE-Infinity | ratio: TTFT 0.26 / 0.33 / 0.44 / 0.47x | where: v2 Sect. 6.2, Fig. 10
+  - v2 average TPOT reduction: 46 / 38 / 27 / 22 % | baseline: same four | ratio: 0.54 / 0.62 / 0.73 / 0.78x | where: v2 Sect. 6.2
+  - v2 hit rate gain: +14 / +37 / +68 % over Mixtral-Offloading / ProMoE / MoE-Infinity | baseline: - | ratio: - | where: v2 Sect. 6.2
+  - v2 abstract: latency -47 %, hit +39 % | baseline: state of the art | ratio: - | where: v2 abstract
+  - v1 average TTFT reduction: 44 / 35 / 33 / 30 % | baseline: DeepSpeed / Mixtral-Offloading / ProMoE / MoE-Infinity | ratio: 0.56 / 0.65 / 0.67 / 0.70x | where: v1 Sect. 5.2
+  - v1 average TPOT reduction: 70 / 61 / 55 / 48 % | baseline: same | ratio: 0.30 / 0.39 / 0.45 / 0.52x | where: v1 Sect. 5.2
+  - v2 on A100 80GB: smaller gains than on 3090 | baseline: - | ratio: - | where: Fig. 13, Sect. 6.5
+  - v2 expert cache limit 6 GB: TPOT -36 / -25 / -16 / -29 % | baseline: DeepSpeed / Mixtral-Off / ProMoE / MoE-Inf | ratio: - | where: Sect. 6.4
+- Catalog / first-pass numbers:
+  - 'TTFT reduced 30-44 % vs DeepSpeed-Inference, Mixtral-Offloading, ProMoE, MoE-Infinity' -> yes for v1; wrong for v2/EuroSys: v1: 44/35/33/30 %; v2 (published): 74/67/56/53 %
+  - 'prefill TTFT is dominated by loading' -> absent: neither version states this as a measured claim; both note prefill is compute-bound in general (Sect. 2.1); TTFT gains come from fewer on-demand loads with ~40-token prompts
+  - first-pass: 'no dedicated prefill-loading claim' -> yes: 
+  - first-pass: v2 TTFT -74/-67/-56/-53, latency -47, hit +39 -> yes: 
+- Transfers to our regime: no. 6xRTX 3090 with experts in 480 GB host DRAM, PCIe copies, Hugging Face Transformers; prompts of ~40 tokens (TTFT then measures a handful of tokens' experts), baselines include the weak DeepSpeed layer offload. The relevant NVMe prompt sizes (hundreds of tokens) are not covered. Its trajectory/semantic expert maps need stored history of earlier prompts.
+- Quality loss: Lossless.
+- Ablation: Yes (Fig. 14): expert pattern tracking (speculate / hit count / map T / T+S / T+S+delta) and prefetch vs caching; expert-map-store capacity; batch size 1-8.
+- Limitations (authors): Authors discuss: lower gains on faster GPU; semantic map store requires history; ProMoE re-implemented best effort; discussion section on expert parallelism.
+- Versus our findings: No.
+
+## P-0064 (s1 #9): Reddit r/LocalLLaMA post 'Drastically improve prompt processing speed for --n-cpu-moe partially offloaded models' (u/coder543, ~15 May 2026; snapshot of reddit.sentinel-team.org/posts/1tany5t, 117 points, 53 comments, 17 captured)
+
+- Read: Archived snapshot HTML (curl), post body and the 17 captured comments read; not the live Reddit page; raw text read: True
+- Setup: gpt-oss-120b-F16.gguf, llama.cpp llama-bench on one RTX 3090 24 GB; CPU/RAM not stated (a commenter asks); --n-cpu-moe raised so the run stays in VRAM (25/26/25/26/28 for ubatch 256/512/2048/4096/8192). First four points pp4096, the 8192 point pp8192. Single run per point, 'informal'.
+- Numbers:
+  - prefill tok/s at ubatch 256 / 512 (default) / 2048 / 4096 / 8192: 240.03 / 380.27 / 1112.54 / 1682.47 / 2090.68 | baseline: default ub 512 = 380.27 | ratio: 0.63 / 1.00 / 2.93 / 4.42 / 5.50x | where: post table
+  - generation tok/s same rows: 33.14 / 32.29 / 32.96 / 32.38 / 30.05 | baseline: 32.29 at default | ratio: 1.03 / 1.00 / 1.02 / 1.00 / 0.93x | where: post table
+  - author's claims: '380 -> 2091 tok/s, roughly 5.5x'; '8.7x vs ub 256'; generation -7 % | baseline: - | ratio: 2090.68/240.03 = 8.71x | where: post body
+  - commenter dispanser: real agentic turns: prompt eval 1186 tok/s (7842 tokens), 1070 (1250), 685 (203 tokens) | baseline: - | ratio: - | where: comment
+- Catalog / first-pass numbers:
+  - '380 -> 2091 tok/s prompt processing with larger ubatch' -> yes: table
+  - 'attributed to fewer kernel launches' -> wrong attribution: the post author attributes nothing; the 'fewer kernel launches / launch-overhead bound' explanation is one commenter's (u/ikkiho), unverified. Author's stated mechanism: bigger ubatch needs more GPU compute workspace so more MoE layers go to CPU
+  - 'batching in llama.cpp prefill is already standard' -> partly: default ub is 512 and bigger values must be requested; commenter notes default is deliberately conservative for low-VRAM cards
+  - n-cpu-moe equal across rows -> absent: differs per row (25/26/25/26/28); points not strictly comparable
+- Transfers to our regime: no. Discrete GPU does the batched matmuls; experts for the remaining layers are computed on CPU; no disk. Shows only that in llama.cpp a larger physical micro-batch raises prompt throughput when the GPU does the work and that generation barely moves (30-33 tok/s with CPU experts). In our CPU-only NVMe regime the prefill cost is I/O-per-expert and a bigger ubatch would reduce reads per prompt only if experts are read once per micro-batch (not tested).
+- Quality loss: None.
+- Ablation: Only the ubatch sweep (with confounded n-cpu-moe).
+- Limitations (authors): Author: informal, not perfectly controlled (pp4096 vs pp8192; n-cpu-moe changes); larger ubatch costs VRAM.
+- Versus our findings: No.
+
+## P-0066 (s1 #10): ProMoE: Fast MoE-based LLM Serving using Proactive Caching (Xiaoniu Song, Zihang Zhong, Rong Chen, Haibo Chen; SJTU IPADS; arXiv v3 1 Sep 2025)
+
+- Read: arXiv:2410.22134v3 (PDF, full text); raw text read: True
+- Setup: PC with RTX 4090 24 GB, i9-14900K, 128 GB DRAM, PCIe 4.0 (32 GB/s). Models: DeepSeek-MoE 16B (DS-1: 28 L, 64 experts, top-6; FP16), DeepSeek-V2-Lite (DS-2, FP16), Qwen1.5-MoE (QW-1, FP16), Qwen2-MoE 57B (QW-2, INT4), Mixtral (Mixt, INT4, 25 % of experts per token). ShareGPT (Alpaca similar). Batch 1 default (1-4 in Sect. 7.5). Implemented in transformers and llama.cpp; baselines: TO (transformers offload), UM (unified memory), static cache, LRU cache, LO (llama.cpp layer offload with CPU compute). Learned predictor (MLP on intermediate results, 84.7 % accuracy) + stride prefetch + chunked prefetch + early preemption + reordered inference.
+- Numbers:
+  - vs existing open-source offloading, average speed-up: prefill 2.20x (max 3.21x), decode 2.07x (max 5.02x) | baseline: TO/UM/LO (+static/LRU) in transformers and llama.cpp | ratio: - | where: Abstract; Intro p2
+  - vs hand-crafted caches (static, LRU): prefill 1.78x avg (2.48x max); decode 1.34x avg (1.79x max) | baseline: static / LRU caches with the same implementation | ratio: - | where: Intro p2
+  - transformers: vs static / LRU in prefill: 1.42x / 2.21x avg | baseline: - | ratio: - | where: Sect. 7.2
+  - transformers: vs static / LRU in decode: 1.47x / 1.31x avg (max 1.77x / 1.46x) | baseline: - | ratio: - | where: Sect. 7.2
+  - llama.cpp (QW-2) vs LRU / static: prefill 1.53x / 1.10x, decode 1.14x / 1.27x avg | baseline: - | ratio: - | where: Sect. 7.4, Fig. 16
+  - llama.cpp vs UM/LO/static, per-model: 2.25x (3.21 max) prefill; 1.66x (2.07 max) decode | baseline: - | ratio: - | where: Sect. 7.1
+  - ablation transformers decode: prefetch+chunk+preempt+reorder: 1.35x over LRU baseline; prefill early preemption 1.27x, reordered inference 2.39x | baseline: LRU base | ratio: - | where: Sect. 7.3, Fig. 12
+  - cache ratio sweep decode: ProMoE 1.60x vs static, 1.29x vs LRU avg; loading on critical path 25.61 % / 29.20 % (DS-1/QW-2) vs LRU 45.52 / 50.89 % | baseline: - | ratio: - | where: Sect. 7.4
+  - batch 1 -> 4 QW-2 over LRU: 1.16x -> 1.34x | baseline: - | ratio: - | where: Sect. 7.5
+  - Mixtral decode: LO (CPU compute) FASTER than ProMoE | baseline: - | ratio: - | where: Sect. 7.1: 25 % experts active makes fetching costlier than CPU compute
+- Catalog / first-pass numbers:
+  - 'average speedup 2.20x (up to 3.21x) in prefill and 2.07x (up to 5.02x) in decode over offloading baselines' -> yes: abstract; vs the basic offloading baselines, not vs LRU caches (1.78x/1.34x)
+  - 'Predictor plus stride prefetch' -> yes: also chunked prefetch, early preemption, reordered inference
+  - 'Prefetching, not pin(ning)' -> yes: prefetch is the mechanism; static cache is a baseline (pinning loses to ProMoE 1.47x in decode)
+  - first-pass: arXiv 2410.22134v3 Sep 2025; best case vs good cache is 1.34x decode -> yes: average 1.34x, max 1.79x
+- Transfers to our regime: no. Experts in 128 GB host RAM over PCIe 4.0; GPU computes experts; no NVMe; models 16-57B with 64-ish experts; the key win comes from overlapping PCIe with GPU compute, which does not exist for CPU compute reading from disk. Authors themselves note that CPU compute (LO) wins at low cache rates and for Mixtral. In decode the gain over LRU is 1.31x, mostly because misses are hidden; hit rate unchanged.
+- Quality loss: Lossless.
+- Ablation: Yes (Fig. 12, 13): prefetch, chunked prefetch, early preemption, reordered inference; cache-rate sweep (Fig. 14-16); batch and model size sweeps.
+- Limitations (authors): Authors: prefetching alone does not help prefill (all experts needed); LO beats cache systems at low cache rates in decode; llama.cpp gains smaller due to faster compute.
+- Versus our findings: No. Supports that static caches lose to LRU in decode (their: LRU beats static in decode, 'some reuse of experts across iterations'), matching our pin < LRU.
+
+## P-0067 (s1 #10): DALI: A Workload-Aware Offloading Framework for Efficient MoE Inference on Local PCs (Zeyu Zhu, Gang Li, Peisong Wang, Zitao Mo, Minnan Pei, Zhuoran Song, Xiaoyao Liang, ... CAS Institute of Automation / SJTU; arXiv 3 Feb 2026)
+
+- Read: arXiv:2602.03495v1 (PDF, full text); raw text read: True
+- Setup: AMD EPYC 7532 (64 cores; 16 cores / 32 threads used), 256 GB DDR4, RTX 3090 24 GB, PCIe 4.0 x16. Models DeepSeek-V2-Lite-Chat (27 L, 64 routed + 2 shared), Qwen3-30B-A3B (48 L, 128), Mixtral-8x7B-Instruct. C4/Wikitext, prompt 64, generation 64; batch 4-128 (cache-replacement test at batch 4); implemented on KTransformers. Baselines llama.cpp, KTransformers, MoE-Lightning, HybriMoE (and Fiddler, omitted: 14.3x slower). GPU cache ratio 50 % default, wsize 4, usize 1 (Mixtral) / 8 (DeepSeek, Qwen).
+- Numbers:
+  - decode speed-up (batch sweep): 3.97x / 2.16x / 1.48x / 1.32x | baseline: llama.cpp / KTransformers / MoE-Lightning / HybriMoE | ratio: - | where: Sect. 6.2 p9
+  - prefill speed-up: 7.62x / 3.80x / 2.45x / 2.00x | baseline: same | ratio: - | where: Fig. 13, Sect. 6.2
+  - Workload-aware cache replacement: 1.23x decode speed-up | baseline: HybriMoE's score-based replacement | ratio: 1.23x (cache 25/38/50 %, batch 4) | where: Sect. 6.3 (3), Fig. 17a
+  - cache hit rate (Mixtral): Workload-Aware up to ~52 % (window/step grid 39.8-52.3 %) | baseline: HybriMoE 36.9 % | ratio: +3 to +15 points | where: Fig. 17c
+  - greedy assignment: 4.42x over naive, 1.23x over HybriMoE assignment; 1.70x over optimal-plan solver (solver overhead 55 % vs 4.5 %) | baseline: - | ratio: - | where: Sect. 6.3 (1)
+- Catalog / first-pass numbers:
+  - 'Cache replacement that follows temporal correlation of expert workload across tokens' -> yes: score = per-expert token counts accumulated over a window of wsize tokens; every window the top-usize CPU experts swap with the lowest-score GPU experts, scores reset
+  - 'adaptive policy, the opposite of a static pin' -> yes: windowed top-K swap; reset each window
+  - first-pass: decode 3.97x vs llama.cpp, 1.32x vs HybriMoE; prefill 7.62x/2.00x; cache 1.23x -> yes: 
+  - first-pass: 'GPU cache 50 % default, batch 8-128' -> partly: decode figures batch 4/8/16/32/64/128; cache-replacement test batch 4
+- Transfers to our regime: no. GPU cache 50 % of experts, 256 GB RAM holds everything, batch >= 4 (workload = tokens per expert, meaningless at batch 1 where each expert has workload 0 or 1), CPU+GPU hybrid scheduling. The replacement rule itself is a windowed frequency policy, similar to LFU with periodic reset; at batch 1 it reduces to counting activations in the last wsize tokens.
+- Quality loss: Lossless.
+- Ablation: Yes (Sect. 6.3): greedy assignment vs HybriMoE/optimal; prefetching strategies (Naive, Random, HybriMoE, Residual-based; Fig. 16); cache replacement vs HybriMoE/LRU/score (Fig. 17).
+- Limitations (authors): Not given; Fiddler excluded for slowness; speed-ups are over baselines with static layer mapping (llama.cpp, KTransformers).
+- Versus our findings: No.
+
+## P-0068 (s1 #10): ELDR: Expert-Locality-Aware Decode Routing for PD-Disaggregated MoE Serving (Sangjin Choi, Sukmin Cho, Yifan Xiong, Ziyue Yang, Youngjin Kwon, Peng Cheng; KAIST / Microsoft Research; arXiv v2 2 Jul 2026)
+
+- Read: arXiv:2607.00466v2 (PDF, full text); raw text read: True
+- Setup: 5-node cluster of AMD MI300X (8 GPU/node, 192 GB HBM, 400 Gbps IB), vLLM 0.21.0rc1 / ROCm 7.2, NIXL PD disaggregation. Models Qwen3-30B-A3B (128 experts top-8), GPT-OSS-120B (128, top-4, mxfp4), Gemma-4-26B-A4B (128, top-8), Qwen3-235B-A22B (TP4/EP4). Workloads: task mix (11,668 prompts: legal, code, math, medical) and language mix (WildChat); request rates 20-100 qps; 8P16D default. Baselines round-robin, JSQ, power-of-two choices, random, static Domain partition.
+- Numbers:
+  - per-expert prefill vs decode activation correlation: r = 0.70 (GPT-OSS-120B), 0.92 (Gemma-4-26B-A4B); Qwen3-30B-A3B value is in the figure only (abstract range 0.70-0.92) | baseline: - | ratio: - | where: Fig. 3 p4; Intro
+  - median TPOT reduction: task workload 7.0-13.9 %; language workload 5.9-10.0 % | baseline: best load balancer | ratio: - | where: Sect. 6.1
+  - tail TPOT (task): 3.4-6.0 % lower; language: -6.2 % (Qwen3), +1.5 % worse (GPT-OSS), +0.2 % worse (Gemma) | baseline: best load balancer | ratio: - | where: Sect. 6.1
+  - same-domain decode batches activate fewer distinct experts: 17-21 % fewer | baseline: mixed batches | ratio: - | where: Intro; Sect. 3
+  - MoE-layer latency vs active experts: 16 -> 128 active experts raises latency 4.7x at fixed batch | baseline: - | ratio: - | where: Sect. 3.1, Fig. 2 (one MI300X)
+  - runtime overhead: 0.86 ms total, 1.2 % of median TTFT 69 ms | baseline: - | ratio: - | where: Table 1 p11
+- Catalog / first-pass numbers:
+  - 'Prefill and decode expert use are strongly correlated on Qwen3-30B-A3B, and substantial on GPT-OSS-120B' -> yes: paper text; numbers are in Fig. 3 labels: GPT-OSS r=0.70, Gemma r=0.92
+  - first-pass: TPOT -5.9..13.9 % -> yes: median TPOT, union of the two workload ranges
+  - first-pass: correlation 0.70-0.92 -> yes: Pearson on normalised per-expert activation, points pooled over domains (128 points/model); the Spearman rho in Eq.1 is a different (signature) quantity
+  - 'Supports the premise, but it is a routing paper, not of cache' -> yes: request routing across decode workers
+- Transfers to our regime: no. Only the premise transfers: a request's prefill expert footprint predicts its decode expert footprint. Correlation is of per-expert totals pooled across domains (so partly reflects domain-level structure) and is not a hit rate for a pinned set of size k; no cache is evaluated; MI300X cluster with HBM-resident experts.
+- Quality loss: None (routing of requests only).
+- Ablation: Yes: signature design (K clusters, tau band, idf), baselines Domain vs ELDR, pool-size scaling (8.0 / 9.8 / 10.2 % median TPOT), overhead table.
+- Limitations (authors): Gains depend on how separable workload domains are; tail TPOT regresses on language workload for 2 models; per-cell variation.
+- Versus our findings: No. Consistent with pin-after-prefill having some signal; our measured number (pin from first decode tokens beats cross-prompt pin) already says the prompt-specific footprint matters.
+
+## Family sections
+
+### Family s1 #8 (pin plus router-logit bias toward resident experts)
+Prior art found and read:
+- Skliar et al., Mixture of Cache-Conditional Experts for Efficient Mobile Device Inference, arXiv 2412.00099v2 (TMLR June 2025; Qualcomm AI Research). Training-free Cache-Prior: re-ranks the router so experts already in DRAM are promoted (max-rank, cumulative-probability and cache-prior variants, lambda 0.1-0.9). Qwen1.5-MoE-A2.7B, DeepSeek-V2-Lite, Phi-3.5-MoE, Mixtral-8x7B; batch 1; miss rate reduced by >50 %, ppl +0.1-3 %, accuracy <0.1 % on MMLU/GSM8K; on-device llama.cpp CPU deployment on Snapdragon phones (12 GB: 4-bit, 30 of 60 experts per layer cached; 16 GB: 8-bit, 45 of 60), >2x token throughput over LRU (Fig. 1 right, 10 runs), experts mlock-ed in DRAM and loaded from flash on miss; notes MoEs lack strong temporal locality. This is the closest published work to our family: same regime type (CPU llama.cpp, batch 1, flash storage, DRAM too small), training-free, and it already beats the oracle-cache bound by slight selection flexibility. It threatens the novelty of any plain 'bias toward resident experts' idea.
+- Son (P-0058): gate-weight-guarded substitution on a 512-expert top-10 model (above).
+- SpecMD (P-0057): runs cache-aware routing as one policy axis, lambda 0.1-0.5.
+- Cache-aware router training (P-0055): changing the model itself.
+- FlashMoE, arXiv 2601.17063v2 (KAIST, Oct 2026): SSD expert offload on a desktop (Ryzen 5 9600X, RTX 5070 Ti, PCIe5 NVMe 7.4 GB/s, ~1 GB DRAM left free), tiny ML cache-replacement net (113 KB/layer, recency+frequency scores); hit +21 % over LRU and +51 % over LFU (OLMoE), tok/s +22 % (OLMoE) and +7 % (Qwen3-30B-A3B, 12-24/128 cached) over LRU, 2.6x over Fiddler/DAOP, 2.5x total vs llama.cpp including prefill loading; reports routed-expert share growing sublinearly with prompt length (47/58/64/67 % at 32/64/128/256 tokens, model not stated). Near our regime (SSD, edge); only +7 % over LRU on a 128-expert top-8 model, which bounds what a learned replacement policy adds there.
+- Also found by search (titles and abstracts only, NOT read in full, so not used for conclusions): BuddyMoE and SliceMoE (arXiv 2512.12990, bit-sliced expert caching with cache-aware routing), CoMoE (arXiv 2508.09208), SGLang SSD Expert Pack blog (lmsys.org, 29 Aug 2026), MoEpic (arXiv 2509.08342, downloaded but only skimmed), SSD offloading energy study (arXiv 2508.06978).
+What is new in our variant, if anything: not the idea of biasing routing toward cached experts (Skliar 2024, SpecMD, Son). Possibly open: pairing it with a static/calibrated pin and with the 512-expert top-10 geometry plus NVMe at 2-8 footprints; Son shows the 512/10 model tolerates substitution when heavy misses are fetched, but with GPU cache of 25 %. Closest papers read in full: Skliar (2412.00099), Son (rs-11268552), SpecMD (2602.03921).
+
+### Family s1 #9 (expert-major / layer-wise prefill)
+Read in full or substantial part: SeqMoE, ExpertFlow, MoE-Lightning, fMoE/FineMoE, ProMoE (ablation: prefetch alone gives no gain in prefill because nearly all experts are accessed; reordered inference 2.39x and early preemption 1.27x do), FlashMoE (prefill loads 47-67 % of experts for 32-256 tokens; total latency including expert loading 2.5x over llama.cpp). Layered prefill (Lee et al., arXiv 2510.08055v2, MLSys 2026) was read at abstract/introduction level only: chunked prefill raises MoE expert-weight traffic by up to 39 %, layer-group scheduling lowers TTFT up to 70 % (GPU serving, weights resident). No paper read measures 'read each expert once per layer for the whole prompt' with experts on NVMe on a CPU-only machine; SeqMoE and layered prefill both assert that chunking re-reads experts, which is the premise of our family, but neither tests it from disk. Our own B.md s1 #9 stays: the gain is a read-size/overlap effect and the stock-mmap prefill rate is unmeasured. Novelty of our variant: open for the CPU+NVMe regime; the idea (layer-major prefill to avoid re-loading experts) is known from layered prefill (GPU) and chunk-reload remarks in SeqMoE.
+
+### Family s1 #10 (pin experts after prefill)
+Read in full: ProMoE (static cache loses to LRU in decode), DALI (windowed workload-score replacement, batched), ELDR (premise only), plus P-0056 comment (10-token calibrated pin 42 %), FlashMoE (learned replacement +7 % over LRU on Qwen3-30B). Not re-read here (outside this batch): Fate, MoE-Infinity, In-depth Analysis, llama.cpp #20757, FlashMoE rows P-0069..P-0073 (other batch). No read paper pins a prefill-derived set in a cache of 2-8 footprints and compares with LRU at equal bytes. The closest are the P-0056 comment (calibrated pin, hit 42 % vs oracle 45 %, combined with LRU 56 %) and MoE-Infinity (per-request activation matrix, from memory). Novelty of our variant: open/variant; and our own measurement says a static prefill pin does not beat LRU above ~1 footprint.

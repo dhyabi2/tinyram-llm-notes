@@ -1,0 +1,599 @@
+[
+ {
+  "method_row_id": "P-0093",
+  "title": "Running DeepSeek-V4-Flash and Kimi-K3 on Consumer Hardware with SSD Expert Pack (WiCi AI + SGLang Team, LMSYS blog, 2026-08-29)",
+  "id_read": "blog HTML https://lmsys.org/blog/2026-08-29-sglang-ssd-expert-pack/ ; companion arXiv 2609.18110v1 (SSD-LLaMA) read in part",
+  "raw_text_read": true,
+  "setup": "Intel Ultra5 230F, 32 GB RAM, 2 TB NVMe (bandwidth not stated), RTX 5090 32GB; DeepSeek-V4-Flash MXFP4 GGUF 155.10 GB (pack 147.18), Kimi-K3 Q2_K 38 shards 1009.51 GB (pack 985.61), Kimi 92 routed layers top-16; params/expert counts/DeepSeek top-k not on page; batch 1, 10 requests x 200 tokens; baselines Ollama 0.33.1 (DeepSeek, offload settings not given) and llama.cpp -ngl -1 --cpu-moe -t 16 (Kimi); SGLang GPU expert cache 21 GiB (DeepSeek) / 5 GiB (Kimi), direct I/O, pinned staging",
+  "numbers": [
+   {
+    "what": "DeepSeek decode Alpaca tok/s",
+    "value": "1.992",
+    "baseline": "0.288 (Ollama)",
+    "ratio": "6.92x",
+    "where": "Sec.8 table"
+   },
+   {
+    "what": "DeepSeek decode MMLU tok/s",
+    "value": "1.846",
+    "baseline": "0.282",
+    "ratio": "6.55x",
+    "where": "Sec.8 table"
+   },
+   {
+    "what": "DeepSeek prefill Alpaca",
+    "value": "2.532",
+    "baseline": "1.108",
+    "ratio": "2.285x",
+    "where": "Sec.8 table"
+   },
+   {
+    "what": "DeepSeek prefill MMLU",
+    "value": "4.141",
+    "baseline": "1.223",
+    "ratio": "3.386x",
+    "where": "Sec.8 table"
+   },
+   {
+    "what": "Kimi decode vs llama.cpp",
+    "value": "absolute tok/s only in charts",
+    "baseline": "llama.cpp --cpu-moe",
+    "ratio": "3.30x Alpaca / 3.52x MMLU (as stated)",
+    "where": "Sec.8 text"
+   },
+   {
+    "what": "VRAM expert-cache hit (unique keys)",
+    "value": "DeepSeek 54.2%/46.4%; Kimi 17.0%/22.7%",
+    "baseline": null,
+    "ratio": null,
+    "where": "Sec.8"
+   },
+   {
+    "what": "SSD traffic per generated token",
+    "value": "DeepSeek 1.66/2.04 GB; Kimi 22.10/27.63 GB",
+    "baseline": null,
+    "ratio": "implied DeepSeek SSD rate 3.3-3.8 GB/s (my arithmetic)",
+    "where": "Sec.8"
+   },
+   {
+    "what": "SSD-LLaMA ablation: all-pack vs GGUF mmap",
+    "value": "2.6x DeepSeek-V4-Flash, 4.1x Kimi-K2.7-Code",
+    "baseline": "GGUF mmap",
+    "ratio": null,
+    "where": "SSD-LLaMA Sec.5.3 text (Fig.12 not read)"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "offline repack to per-expert contiguous blocks, direct I/O to aligned pinned buffers; GGUF tensor-oriented",
+    "correct": "yes",
+    "true_value": "Sec.2-4"
+   },
+   {
+    "claim": "first pass: decode 0.288->1.992 (6.92x), 0.282->1.846 (6.55x)",
+    "correct": "yes",
+    "true_value": "as stated"
+   },
+   {
+    "claim": "first pass: Kimi 3.30-3.52x",
+    "correct": "yes",
+    "true_value": "as stated"
+   },
+   {
+    "claim": "first pass: hit 17-54%",
+    "correct": "yes",
+    "true_value": "17.0-54.2%"
+   },
+   {
+    "claim": "first pass setting: Ollama/llama.cpp --cpu-moe baselines",
+    "correct": "partly",
+    "true_value": "--cpu-moe only on the Kimi llama.cpp baseline; Ollama has no such flag"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Layout argument transfers (one aligned contiguous extent per expert; our B.md found no slice 4KiB aligned, gate/up 114 MB apart). Speedup does not: GPU with 21 GiB expert cache (hit up to 54%), pinned H2D, baselines at 0.29 tok/s on models 4.7x-31x RAM, no layout-vs-cache ablation in the blog.",
+  "quality_loss": "none by design (no pruning, top-k unchanged); evidence thin: semantically equivalent answers vs Ollama; Kimi matched 200-token reference",
+  "ablation": "none in blog; SSD-LLaMA paper has pack ablation 2.6x/4.1x and VRAM cache ablation 2.78x over no cache",
+  "limitations": "extra SSD space ~ model size, 5-45 min prep, O_DIRECT alignment fail-closed, cache/workload dependent, GPU-only, miss on critical path, no SSD KV offload",
+  "contradicts_our_findings": "Not a contradiction but suggests our mmap emulation (1.5-2.4x gap) understates the stock-mmap gap; true stock llama.cpp mmap not measured by us",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0094",
+  "title": "gpt-oss-120b - a 58 GB model at 5.2x device RAM (BigMoeOnEdge docs/benchmarks-gpt-oss.md)",
+  "id_read": "raw github file, main @ measured 1419af3 (2026-07-17)",
+  "raw_text_read": true,
+  "setup": "12GB Android 16 phone, 11.3 GB usable, arm64 CPU, gpt-oss-120b Q4_K_M 58.46 GB, 36 layers, 128 experts, top-4 default, MXFP4; flash bandwidth not stated; batch 1, 256 tokens, one prompt, greedy, -t 4 --no-think --moe-stream --overlap --dense-weights anon; data on /data for working O_DIRECT",
+  "numbers": [
+   {
+    "what": "k=2 cache 2000MiB lane 8 tok/s",
+    "value": "2.191 (590.3 MiB/token, hit 32.0%, throttled 1.55GHz)",
+    "baseline": "k=4 same config 1.300",
+    "ratio": "1.69x",
+    "where": "table"
+   },
+   {
+    "what": "k=4 cache 2000 lane 4",
+    "value": "0.998",
+    "baseline": "k=4 cache off lane 4 0.711",
+    "ratio": "1.40x",
+    "where": "table"
+   },
+   {
+    "what": "headline 3.2x",
+    "value": "2.191",
+    "baseline": "0.687 (old 24-token sweep, k=4, dense page-cached)",
+    "ratio": "3.19x; like-for-like k=4: 1.300/0.687=1.89x",
+    "where": "intro + provenance"
+   },
+   {
+    "what": "dense policy majflt/token",
+    "value": "6-10 (O_DIRECT anon)",
+    "baseline": "314-1894 (page-cached)",
+    "ratio": "compute 0.948->0.156 s/tok",
+    "where": "dense-policy table"
+   },
+   {
+    "what": "mmap baseline",
+    "value": "11.24 s/tok k=2, 13.34 s/tok k=4 (24-token probes, older build)",
+    "baseline": "2.191 tok/s",
+    "ratio": "~24.6x (not matched A/B)",
+    "where": "vs mmap section"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "0.687 to 2.191 tok/s (3.2x)",
+    "correct": "yes",
+    "true_value": "numbers right but mixes k=4->k=2, protocol and build"
+   },
+   {
+    "claim": "mechanism: routing weights through O_DIRECT instead of page cache",
+    "correct": "no",
+    "true_value": "dense (non-expert) weights read via O_DIRECT into anonymous buffers; experts were already O_DIRECT"
+   },
+   {
+    "claim": "first pass: best 2.191 (top-k 2); k4 1.300; cache off 0.711; mmap 11-13 s/token",
+    "correct": "yes",
+    "true_value": "as stated"
+   },
+   {
+    "claim": "first pass: summary wrong; O_DIRECT applied to dense not experts",
+    "correct": "yes",
+    "true_value": "as stated"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Closest regime (CPU-only phone, model 5.2x RAM, batch 1, flash streaming) and the dense-weights-evicted fault-storm mechanism may recur at 8GB; but headline includes top-k 2 (lossy) and protocol change, 128 experts top-4, phone flash, throttled.",
+  "quality_loss": "only --no-think and one-prompt checks: 17x23 correct at k=2,3 (391), wrong at default k=4 (387); coherent essay; no benchmark",
+  "ablation": "yes: dense policy, cache on/off, k=2 vs 4, lanes (confounded by thermals), prefetch=4 regresses (older sweep)",
+  "limitations": "cells from different device states, lane comparison confounded, mmap rows from older build and 24-token probes, single prompt",
+  "contradicts_our_findings": "Not a contradiction; identifies an unmodelled term: a fixed expert cache competes with dense weights/page cache for scarce RAM",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0095",
+  "title": "Zero Python, Zero Frameworks, 397 Billion Parameters: Flash-MoE Is Kind of Absurd (urandom.io, Bender, 2026-03-22) + repo danveloper/flash-moe README and paper PDF",
+  "id_read": "blog HTML; raw README; paper/flash_moe.pdf (repo pushed 2026-03-19)",
+  "raw_text_read": true,
+  "setup": "MacBook Pro M3 Max 48GB unified, 1TB SSD 17.5 GB/s seq read measured; Qwen3.5-397B-A17B 60 layers (45 GatedDeltaNet+15 attn), 512 experts, default K=10 reduced to K=4, +1 shared; 4-bit experts 209GB (7.08MB each), 2-bit 120GB (3.93MB); non-expert 5.5GB mmap; C/ObjC/Metal, parallel pread, OS page cache only; batch 1",
+  "numbers": [
+   {
+    "what": "4-bit K=4 FMA tok/s",
+    "value": "4.36 (README); paper Table1 4-bit rows 2.83-5.29",
+    "baseline": "3.90 before FMA",
+    "ratio": null,
+    "where": "README"
+   },
+   {
+    "what": "2-bit trust-OS tok/s",
+    "value": "5.74 (peak 7.05)",
+    "baseline": null,
+    "ratio": null,
+    "where": "README, Table 1"
+   },
+   {
+    "what": "K sweep tok/s",
+    "value": "K=4 3.15",
+    "baseline": "K=10 1.20",
+    "ratio": "2.63x",
+    "where": "Table 3"
+   },
+   {
+    "what": "K=6",
+    "value": "1.91",
+    "baseline": "K=10 1.20",
+    "ratio": "1.59x",
+    "where": "Table 3"
+   },
+   {
+    "what": "Metal LRU 3.5GB vs none (4-bit)",
+    "value": "4.80",
+    "baseline": "5.29 without cache",
+    "ratio": "0.91x",
+    "where": "Table 1/6"
+   },
+   {
+    "what": "Trust OS vs Metal LRU+F_NOCACHE (2-bit)",
+    "value": "5.74",
+    "baseline": "4.11",
+    "ratio": "1.40x (paper says 38%)",
+    "where": "Table 6"
+   },
+   {
+    "what": "per-layer I/O",
+    "value": "1.37 ms of 2.9 ms (47%)",
+    "baseline": null,
+    "ratio": null,
+    "where": "Sec 4.2"
+   },
+   {
+    "what": "LRU hit per layer (simulation)",
+    "value": "49/59/68/71% at 16/32/64/128 entries",
+    "baseline": null,
+    "ratio": null,
+    "where": "Sec 4.6"
+   },
+   {
+    "what": "consecutive-token overlap",
+    "value": "8-34% per layer at K=4",
+    "baseline": null,
+    "ratio": null,
+    "where": "Sec 4.6"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "about 4.4 tok/s pread streaming",
+    "correct": "yes",
+    "true_value": "4.36 at K=4, 4-bit (README); paper Table 1 inconsistent"
+   },
+   {
+    "claim": "non-expert weights about 5.5 GB resident",
+    "correct": "yes",
+    "true_value": "5.5 GB"
+   },
+   {
+    "claim": "~35GB OS page cache (71% hit)",
+    "correct": "partly",
+    "true_value": "README says 35GB and ~71%; paper's 71% is a 128-entry/layer LRU simulation, not a measured OS cache hit rate"
+   },
+   {
+    "claim": "first pass: whether K=4 is reduced unverified",
+    "correct": "no",
+    "true_value": "verified: default K=10, K=4 is reduced; 3.15 vs 1.20 tok/s"
+   },
+   {
+    "claim": "first pass: 2-bit breaks JSON",
+    "correct": "yes",
+    "true_value": "README; paper claims 2-bit indistinguishable (internal contradiction)"
+   },
+   {
+    "claim": "first pass: custom caches slower",
+    "correct": "yes",
+    "true_value": "Table 6"
+   }
+  ],
+  "transfers": "partly",
+  "why": "pread of one blob per expert and OS page cache beating custom cache carry; 17.5 GB/s SSD (5.8x ours), Apple unified memory + GPU, and K=4 instead of K=10 do not.",
+  "quality_loss": "K 10->4 'no observable quality loss' on 5 prompts/200 tokens, K=3 collapses (EOS); 2-bit only RMSE and 3 qualitative prompts; README says 2-bit breaks JSON tool calling; no benchmarks",
+  "ablation": "yes: 58-experiment negative-results table (LZ4 -13%, F_RDADVISE 0%, temporal prediction -18%, MLP predictor 31% acc, file clustering 0%, mmap -5x, MTP break-even)",
+  "limitations": "paper admits AI-assisted, Apple-specific; SSD DMA vs GPU memory controller contention; internal table inconsistencies",
+  "contradicts_our_findings": "Cross-layer correlation near zero and 31% MLP predictor warn about layer-to-layer prediction; file clustering 0% agrees with our C.md (<1.04x). Lilting page UNREAD",
+  "unread_reason": "Lilting write-up referenced in the catalog row not fetched"
+ },
+ {
+  "method_row_id": "P-0096",
+  "title": "Running a 26B MoE on an 8 GB Jetson by streaming experts from SSD (Anish Shrestha, dev.to, 2026-08-01)",
+  "id_read": "dev.to API article 4287871 body_markdown (catalog URL slug truncated '-2j', real '-2jpf')",
+  "raw_text_read": true,
+  "setup": "Jetson Orin Nano Super 8GB MAXN, NVMe (fio random read ~1.27 GB/s), Gemma 4 26B-A4B QAT Q4 (13.3 GiB), expert count/top-k not stated; llama.cpp fork moe-stream, llama-bench tg128, batch 1; 32 slots/layer LFU 3GB pinned pool, 8 IO threads, overlap with shared FFN",
+  "numbers": [
+   {
+    "what": "streaming overlap on tok/s",
+    "value": "2.95",
+    "baseline": "--cpu-moe mmap 1.94",
+    "ratio": "1.52x",
+    "where": "table"
+   },
+   {
+    "what": "overlap off",
+    "value": "2.23",
+    "baseline": "1.94",
+    "ratio": "1.15x (overlap alone 1.32x)",
+    "where": "table"
+   },
+   {
+    "what": "live request",
+    "value": "2.09",
+    "baseline": null,
+    "ratio": null,
+    "where": "text"
+   },
+   {
+    "what": "IO-bound limit",
+    "value": "~5 tok/s",
+    "baseline": null,
+    "ratio": null,
+    "where": "text"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "2.95 vs 1.94 (1.5x), 8 IO threads",
+    "correct": "yes",
+    "true_value": "as stated"
+   },
+   {
+    "claim": "first pass numbers (2.23, IO ~5, 32-slot LFU, prefill 1/4)",
+    "correct": "yes",
+    "true_value": "as stated"
+   },
+   {
+    "claim": "first pass transfers: yes",
+    "correct": "partly",
+    "true_value": "downgraded: unified-memory GPU, model only 1.7x RAM, mmap baseline, overlap with shared-FFN GPU compute"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Streaming + LFU slot cache + overlap on 8GB box transfers in spirit; GPU/unified memory, small model vs RAM, mmap baseline, expert count unknown.",
+  "quality_loss": "none by construction; 32 greedy steps bit-identical logits on 3 families",
+  "ablation": "overlap on/off; slots 32 vs 64 (memory cliff); no layout-vs-cache split",
+  "limitations": "cold prefill ~1/4 speed, single machine, self-reported, O_DIRECT not done",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0097",
+  "title": "HN comments by Roxxik (io_uring layer in a llama.cpp fork); catalog row also cites Apple LLM in a flash",
+  "id_read": "hnrss feed https://hnrss.org/user?id=Roxxik (HTTP 200) + HN API parents; items 48875355, 48857125, 48857911, 47477004",
+  "raw_text_read": true,
+  "setup": "not given: comment 48875355 gives no model, quant, hardware, RAM, SSD or baseline tok/s; separate comment 48857125 says Kimi 2.5 'even worse quant than 4bit, IIRC 2.6 or so' (own recall)",
+  "numbers": [
+   {
+    "what": "io_uring layer vs simple mmap",
+    "value": "'slightly short of a 2x tok/s speedup' (no absolute numbers)",
+    "baseline": "simple mmap",
+    "ratio": null,
+    "where": "HN 48875355, 2026-07-11"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "under 2x tok/s over plain mmap",
+    "correct": "yes",
+    "true_value": "quotation verified as 'slightly short of 2x'; self-reported, unmeasurable"
+   },
+   {
+    "claim": "on Kimi 2.5 at below 4-bit",
+    "correct": "partly",
+    "true_value": "Kimi 2.5 / sub-4bit appears in a different comment (48857125, with 'IIRC'); not stated in the io_uring comment"
+   },
+   {
+    "claim": "first pass: url 404, search summary only",
+    "correct": "no",
+    "true_value": "feed returns 200 and is readable"
+   }
+  ],
+  "transfers": "unclear",
+  "why": "Anecdote; qualitatively consistent that mmap faults serialize and async/direct I/O helps; magnitude unsupported; Opus-written code.",
+  "quality_loss": "not stated",
+  "ablation": "none",
+  "limitations": "author notes io_uring still copies via page cache without O_DIRECT, O_DIRECT has its own problems",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0099",
+  "title": "LLM in a flash: Efficient Large Language Model Inference with Limited Memory (Alizadeh, Mirzadeh, Belenko, Khatamifard, Cho, Del Mundo, Rastegari, Farajtabar; Apple)",
+  "id_read": "arXiv 2312.11514v3 (30 Jul 2024) PDF",
+  "raw_text_read": true,
+  "setup": "dense models OPT 6.7B, Falcon 7B relufied, Persimmon 8B, Phi-2 2.7B, Llama2 7B (no MoE evaluated); M1 Max 1TB SSD, M2 Ultra 2TB, RTX 4090 24GB; about half of model in DRAM (65% sparsity limit); 32 read threads, OS cache bypassed; 128-token prompt, 256 generated; batch 1; naive baseline uses theoretical best I/O (half model)",
+  "numbers": [
+   {
+    "what": "OPT6.7B I/O latency M1 Max",
+    "value": "87 ms",
+    "baseline": "2196 ms naive",
+    "ratio": "25.2x",
+    "where": "Table 2"
+   },
+   {
+    "what": "OPT CPU total",
+    "value": "669 ms",
+    "baseline": "3182",
+    "ratio": "4.76x",
+    "where": "Table 3"
+   },
+   {
+    "what": "OPT Metal M1",
+    "value": "565",
+    "baseline": "2389",
+    "ratio": "4.23x",
+    "where": "Table 3"
+   },
+   {
+    "what": "OPT Metal M2",
+    "value": "305",
+    "baseline": "2270",
+    "ratio": "7.44x",
+    "where": "Table 3"
+   },
+   {
+    "what": "OPT GPU",
+    "value": "84",
+    "baseline": "2218",
+    "ratio": "26.4x",
+    "where": "Table 3"
+   },
+   {
+    "what": "Falcon/Persimmon/Phi-2/Llama2 CPU",
+    "value": "706/1041/546/994",
+    "baseline": "3095/3806/1287/3095",
+    "ratio": "4.38/3.66/2.36/3.11x",
+    "where": "Table 3"
+   },
+   {
+    "what": "throughput sparse reads",
+    "value": "1.25 -> 2.25 GB/s with bundling",
+    "baseline": "6.10 GB/s dense",
+    "ratio": null,
+    "where": "Table 2"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "up to 4x CPU, 20x GPU",
+    "correct": "yes",
+    "true_value": "abstract; body 4-5x and 20-25x"
+   },
+   {
+    "claim": "32 KiB or larger reads across threads",
+    "correct": "yes",
+    "true_value": "Sec 2"
+   },
+   {
+    "claim": "first pass: I/O 2196->87, CPU 3182->669 (~4.8x), GPU 2218->84 (~26x)",
+    "correct": "yes",
+    "true_value": "as stated"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Only chunk-size/parallel-read lesson transfers; dense FFN neuron sparsity needing a trained low-rank predictor, half model in DRAM, windowing is a small cache, baseline is theoretical best naive.",
+  "quality_loss": "Table 4: OPT 6.7B ArcEasy 66.1->66.2, ArcChallenge 30.6->30.6, HellaSwag 50.3->49.8; relufied Falcon with predictors 70.2-72.35 vs 72.52 relufied (base 74.62); higher thresholds degrade slightly",
+  "ablation": "yes Table 2 (hybrid, predictor, windowing, bundling)",
+  "limitations": "single batch, no power/thermal analysis, half-memory assumption, spec decoding preliminary",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0100",
+  "title": "The Other Half of the Memory Wall: Serving 35B MoEs from SSD with Trained Routing Prediction (Edge0; Lin, Wang, Cai, Liu, Zeng; AutoArk)",
+  "id_read": "arXiv 2609.18063v2 (17 Sep 2026) PDF",
+  "raw_text_read": true,
+  "setup": "Qwen3.6-35B-A3B 40 layers x 256 experts, base K=8 released at K=4, int4 g64, 19.5 GB; also Ling 3.0 tiny 24x128 K=8; Mac mini M4 Pro 24GB (Table 1), MacBook M2 16GB (prerouter A/B), MLX only, SSD bandwidth not stated, batch 1; trained per-layer prerouter + unmerged LoRA r=16",
+  "numbers": [
+   {
+    "what": "edge0-35b decode M4 Pro 24GB",
+    "value": "20.4 tok/s, 2.9 GiB",
+    "baseline": "fully resident mlx-lm 3.9 tok/s (18.2 GiB)",
+    "ratio": "5.2x",
+    "where": "Table 1, Sec 3.1/5.4"
+   },
+   {
+    "what": "prerouter disabled",
+    "value": "19.9 tok/s",
+    "baseline": "20.4 with prerouter",
+    "ratio": "1.03x",
+    "where": "Table 1 caption"
+   },
+   {
+    "what": "M2 16GB K=4 on-demand vs prerouter",
+    "value": "3.5 -> 6.4",
+    "baseline": "on-demand",
+    "ratio": "1.83x (+82%)",
+    "where": "Table 3"
+   },
+   {
+    "what": "K=2",
+    "value": "4.8 -> 8.6",
+    "baseline": null,
+    "ratio": "1.79x",
+    "where": "Table 3"
+   },
+   {
+    "what": "K=8",
+    "value": "1.8 -> 3.3",
+    "baseline": null,
+    "ratio": "1.83x",
+    "where": "Table 3"
+   },
+   {
+    "what": "quality avg OpenCompass",
+    "value": "79.2",
+    "baseline": "83.2 fp16",
+    "ratio": "-4.0 pts (text 3.9)",
+    "where": "Table 2"
+   },
+   {
+    "what": "AIME",
+    "value": "86.6",
+    "baseline": "92.7",
+    "ratio": "-6.1",
+    "where": "Table 2"
+   },
+   {
+    "what": "bytes per step K=4",
+    "value": "58.9 MiB prerouter",
+    "baseline": "50.9 on-demand",
+    "ratio": "+16%",
+    "where": "Table 4"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "20.4 tok/s on 24GB M4 Pro (35B)",
+    "correct": "yes",
+    "true_value": "Table 1 (K=4, int4, LoRA)"
+   },
+   {
+    "claim": "vs 3.9 for on-demand streaming",
+    "correct": "no",
+    "true_value": "3.9 is the fully resident server; the paper's on-demand arm on that machine is 19.9 tok/s"
+   },
+   {
+    "claim": "naive on-demand SSD streaming ineffective",
+    "correct": "partly",
+    "true_value": "abstract says so, but own data: 19.9 tok/s on 24GB; on 16GB M2 on-demand is 3.5 tok/s vs 6.4"
+   },
+   {
+    "claim": "OpenCompass 79.2 vs 83.2",
+    "correct": "yes",
+    "true_value": "avg of 5 benchmarks, includes int4 + K=4 + routing replacement"
+   },
+   {
+    "claim": "first pass body note: 3.9 is resident",
+    "correct": "yes",
+    "true_value": "confirmed"
+   }
+  ],
+  "transfers": "no",
+  "why": "Apple MLX, trained prerouter and LoRA per model, K halved (lossy), 24GB machine where resident model nearly fills RAM; prefetch gain ~3% where memory is not tight; our 125B top-10 has no retraining path.",
+  "quality_loss": "avg -4.0 points (79.2 vs 83.2) over AIME/HumanEval/GPQA-D/MMLU-Pro/IFBench; AIME -6.1 (35B), -10.0 (8B)",
+  "ablation": "yes: prerouter vs on-demand at K=2/4/8, prerouter on/off, incremental stacking +34%, LoRA merged vs unmerged; no cache vs layout split",
+  "limitations": "single FIFO request, batching unmodelled, decode CPU-bound (44 ms graph build floor), gains shrink on hot caches/fast storage, adjacent-token agreement ~1/4, prerouter takes unreclaimable residency, MLX only",
+  "contradicts_our_findings": "Do not use 3.9 as evidence that naive streaming fails; paper's own on-demand streaming is 19.9 tok/s on 24GB",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0101",
+  "title": "llama.cpp Discussion #19883 'Why does it takes the same amount of RAM as VRAM?' (LaszloLango, 2026-02-25)",
+  "id_read": "raw GitHub HTML",
+  "raw_text_read": true,
+  "setup": "Windows, 24GB RAM, 16GB VRAM, Vulkan, 4666 MiB model fully offloaded; mmap=true direct_io=false",
+  "numbers": [],
+  "catalog_numbers_correct": [
+   {
+    "claim": "mmap thrashing on oversized models",
+    "correct": "no",
+    "true_value": "not discussed; model fits in VRAM, asker sees RAM mirror due to default mmap; solved via --no-mmap docs"
+   },
+   {
+    "claim": "maintainers note MoE at 100-150% of RAM runs ok with mmap",
+    "correct": "no",
+    "true_value": "no MoE, no maintainer statement; 2 participants"
+   },
+   {
+    "claim": "first pass: wrong, no MoE, no maintainers",
+    "correct": "yes",
+    "true_value": "confirmed; #19825 not re-opened in this pass"
+   }
+  ],
+  "transfers": "no",
+  "why": "Unrelated Q&A about default mmap mirroring GPU-offloaded weights in RAM; later promotional comment (MemVanta) on RSS reduction.",
+  "quality_loss": "n/a",
+  "ablation": "none",
+  "limitations": "n/a",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ }
+]

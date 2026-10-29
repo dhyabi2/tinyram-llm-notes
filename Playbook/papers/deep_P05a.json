@@ -1,0 +1,510 @@
+[
+ {
+  "method_row_id": "P-0103",
+  "title": "SSD Offloading for LLM Mixture-of-Experts Weights Considered Harmful in Energy Efficiency (Kyung, Yun, Ahn; arXiv 2508.06978v1, 9 Aug 2025)",
+  "id_read": "2508.06978v1",
+  "raw_text_read": true,
+  "setup": "Simulator (not measured) of DGX-H100-like node, 8xH100, 256GB DDR5+NVMe per GPU, GPUDirect, NVLink4; Mixtral 8x7B, DeepSeek-R1, Llama4 Maverick, Llama3.3 70B; BF16; uniform-random routing; L_in 1024, first decode step",
+  "numbers": [
+   {
+    "what": "energy per token SSD vs HBM, Mixtral",
+    "value": "3.8-12.5x",
+    "baseline": "HBM",
+    "ratio": "as stated",
+    "where": "Sec V-A, Fig 4"
+   },
+   {
+    "what": "energy per token SSD vs HBM, R1",
+    "value": "4.7-9.8x",
+    "baseline": "HBM",
+    "ratio": "as stated",
+    "where": "Sec V-A, Fig 4"
+   },
+   {
+    "what": "SSD vs CPU-memory offload energy",
+    "value": "2.1-3.6x",
+    "baseline": "DDR",
+    "ratio": "as stated",
+    "where": "Sec V-A"
+   },
+   {
+    "what": "amortisation saturation",
+    "value": "batch ~16 Mixtral, ~64 R1",
+    "baseline": "",
+    "ratio": "unique experts 7.9/8 and 223/256 by uniform formula (my arithmetic)",
+    "where": "Sec V-A"
+   },
+   {
+    "what": "latency penalty with prefetch+NVLink5",
+    "value": "1.32x Mixtral, 1.25x R1",
+    "baseline": "HBM",
+    "ratio": "",
+    "where": "Fig 5"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "saturates about batch 16 Mixtral, 64 R1",
+    "correct": "yes",
+    "true_value": "batch ~16 and ~64"
+   },
+   {
+    "claim": "first pass energy ratios",
+    "correct": "yes",
+    "true_value": "3.8-12.5, 4.7-9.8, 2.1-3.6"
+   },
+   {
+    "claim": "first pass omitted: simulator only, uniform random routing",
+    "correct": "absent",
+    "true_value": "analytical tool, synthetic uniform routing"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Only the saturation formula carries over; energy paper, GPU, simulated, uniform routing",
+  "quality_loss": "none (lossless)",
+  "ablation": "none (batch and flash-energy sweeps)",
+  "limitations": "Current SSD energy; future flash could change result",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0104",
+  "title": "MoE-Lightning: High-Throughput MoE Inference on Memory-constrained GPUs (Cao et al.; arXiv 2411.11217v1, 18 Nov 2024)",
+  "id_read": "2411.11217v1",
+  "raw_text_read": true,
+  "setup": "S1 Mixtral 8x7B 1xT4 16GB Xeon 24c 192GB; S2 1xL4 24GB; S6/S7 8x22B 2/4xT4 416GB; MTBench/HELM; baselines FlexGen, FlexGen(c), DeepSpeed 0.14.3; no disk offload",
+  "numbers": [
+   {
+    "what": "headline throughput unpadded",
+    "value": "10.3x",
+    "baseline": "FlexGen (padded) S1,S2 MTBench",
+    "ratio": "per-bar label not extractable",
+    "where": "Abstract, Fig 7 caption"
+   },
+   {
+    "what": "padded, single GPU",
+    "value": "3.5x / 5x / 6.7x",
+    "baseline": "FlexGen / FlexGen(c) / DeepSpeed",
+    "ratio": "",
+    "where": "Sec 5.2"
+   },
+   {
+    "what": "Table 4 synthetic reasoning S1",
+    "value": "26.349 vs 22.691",
+    "baseline": "FlexGen",
+    "ratio": "1.16x",
+    "where": "Table 4"
+   },
+   {
+    "what": "Table 4 synthetic reasoning S2",
+    "value": "105.29 vs 50.138",
+    "baseline": "FlexGen",
+    "ratio": "2.10x (5.26x vs FlexGen(c))",
+    "where": "Table 4"
+   },
+   {
+    "what": "Table 4 summarization S1",
+    "value": "4.52 vs 3.868",
+    "baseline": "FlexGen",
+    "ratio": "1.17x (text 1.16x)",
+    "where": "Table 4"
+   },
+   {
+    "what": "Table 4 summarization S2",
+    "value": "12.393 vs 7.14",
+    "baseline": "FlexGen",
+    "ratio": "1.74x",
+    "where": "Table 4"
+   },
+   {
+    "what": "Table 5 ablation",
+    "value": "30.12 vs 9.5",
+    "baseline": "FlexGen own policy",
+    "ratio": "3.17x (policy 1.77x, +batch 2.17x)",
+    "where": "Table 5"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "up to 10.3x Mixtral 8x7B one T4 offline",
+    "correct": "yes (as authors' claim)",
+    "true_value": "caption ties it to S1 and S2 (T4 and L4), unpadded vs padded FlexGen"
+   },
+   {
+    "claim": "first pass Table 4 vs FlexGen 1.16-2.1x",
+    "correct": "yes",
+    "true_value": "1.16,2.10,1.17,1.74"
+   },
+   {
+    "claim": "first pass Table 5 3.17x",
+    "correct": "yes",
+    "true_value": "3.17x"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU, model fully in host RAM (disk is future work), offline large batch",
+  "quality_loss": "none (exact)",
+  "ablation": "Table 5: policy, batch size, CGOPipe; no cache/layout/prefetch",
+  "limitations": "Disk offloading future work; CPU attention can bottleneck",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0105",
+  "title": "MoE-Gen: High-Throughput MoE Inference on a Single GPU with Module-Based Batching (Xu et al.; arXiv 2503.09716v1, 12 Mar 2025)",
+  "id_read": "2503.09716v1",
+  "raw_text_read": true,
+  "setup": "C1 A5000 24GB + AMD 7453 + 256GB; C2 512GB; C3 A6000; Mixtral 8x7B/8x22B, DeepSeek-V2, R1; baselines llama.cpp, vLLM, DeepSpeed, FlexGen* and MoE-Lightning* (authors' reimplementations)",
+  "numbers": [
+   {
+    "what": "Mixtral 8x7B decode, 256 tokens",
+    "value": "469 tok/s MoE-Gen(H)",
+    "baseline": "27 DeepSpeed",
+    "ratio": "17.4x",
+    "where": "Table 6"
+   },
+   {
+    "what": "same vs MoE-Lightning*",
+    "value": "469",
+    "baseline": "89",
+    "ratio": "5.3x",
+    "where": "Table 6"
+   },
+   {
+    "what": "same, decode 1024 vs MoE-Lightning*",
+    "value": "283",
+    "baseline": "78",
+    "ratio": "3.6x",
+    "where": "Table 6"
+   },
+   {
+    "what": "Mixtral 8x22B vs MoE-Lightning*",
+    "value": "91 / 57",
+    "baseline": "9 / 6",
+    "ratio": "10.1x / 9.5x",
+    "where": "Table 6"
+   },
+   {
+    "what": "DeepSeek-V2 decode",
+    "value": "31",
+    "baseline": "1 (all model-based)",
+    "ratio": "31x",
+    "where": "Table 1, 6"
+   },
+   {
+    "what": "tokens per expert to hide transfer",
+    "value": "> 2^11",
+    "baseline": "",
+    "ratio": "",
+    "where": "Sec 2, Fig 3"
+   },
+   {
+    "what": "batch 1 Mixtral 8x7B",
+    "value": "MoE-Gen(G) 1.0 tok/s",
+    "baseline": "llama.cpp 0.2, DeepSpeed 0.4",
+    "ratio": "5x / 2.5x",
+    "where": "Table 9"
+   },
+   {
+    "what": "batch 32 DeepSeek-V2-Lite",
+    "value": "35",
+    "baseline": "DeepSpeed 41",
+    "ratio": "0.85x",
+    "where": "Table 9"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "needs more than 2^11 tokens per expert",
+    "correct": "yes",
+    "true_value": "2^11"
+   },
+   {
+    "claim": "first pass 8-31x",
+    "correct": "yes",
+    "true_value": "abstract 8-31x; intro 16-33x; Sec5.3 16-31x"
+   },
+   {
+    "claim": "first pass 469 vs 27 vs 89",
+    "correct": "yes",
+    "true_value": "Table 6"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU, host RAM, thousands of tokens batched; 2^11 tokens/expert at 512 experts top-10 is about 105k tokens (my arithmetic)",
+  "quality_loss": "none (exact)",
+  "ablation": "G vs H (CPU attention), omega sweep, small-batch Table 9",
+  "limitations": "Gains shrink with small batches/long context; no expert prediction",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0106",
+  "title": "ExpertFlow: Optimized Expert Activation and Token Allocation for Efficient MoE Inference (v1) / Efficient MoE Inference via Predictive Expert Caching and Token Scheduling (v2) (He et al.; arXiv 2410.17954 v1 23 Oct 2024, v2 2 Apr 2026)",
+  "id_read": "2410.17954v1 and v2",
+  "raw_text_read": true,
+  "setup": "One A40 48GB + Xeon Gold 6338; Switch-32/64/128, Mixtral 8x7B (v1+v2), Qwen1.5-MoE, DeepSeek-MoE (v2); WMT16, XSUM; baselines Cache-MoE LRU, SE-MoE, Pregated-MoE; batch 4-32; trained 7.21MB routing predictor per model/dataset",
+  "numbers": [
+   {
+    "what": "peak speedup Switch",
+    "value": "9.99x (WMT16), 9.54x (XSUM)",
+    "baseline": "SE-MoE, Switch-128, cache 4",
+    "ratio": "as stated",
+    "where": "v1 Sec 5.3 / v2 Sec 4.2.2"
+   },
+   {
+    "what": "Switch-128 CS16 BS32",
+    "value": "5.86x",
+    "baseline": "SE-MoE",
+    "ratio": "",
+    "where": "v2 4.2.2"
+   },
+   {
+    "what": "Mixtral vs Cache-MoE",
+    "value": "1.96x / 1.99x",
+    "baseline": "Cache-MoE LRU",
+    "ratio": "",
+    "where": "v1 Fig 8, v2 4.2.2"
+   },
+   {
+    "what": "Qwen / DeepSeek-MoE",
+    "value": "2.12x / 1.94x",
+    "baseline": "Cache-MoE",
+    "ratio": "",
+    "where": "v2 4.2.2"
+   },
+   {
+    "what": "token scheduler alone v1",
+    "value": "1.09/1.19/1.16x",
+    "baseline": "w/o TS",
+    "ratio": "",
+    "where": "v1 Table 3"
+   },
+   {
+    "what": "token scheduler alone v2",
+    "value": "854.19->881.91, 680.72->788.30, 628.36->735.35 tok/s",
+    "baseline": "w/o TS",
+    "ratio": "1.03/1.15/1.17x",
+    "where": "v2 Table 2"
+   },
+   {
+    "what": "hit ratio PLEC vs LRU Switch-32 CS8 BS16",
+    "value": "71.89%",
+    "baseline": "36.22%",
+    "ratio": "1.98x",
+    "where": "v2 Fig 10"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "up to 10x over strong offloading baselines",
+    "correct": "partly",
+    "true_value": "10x is vs SE-MoE on Switch-128 cache 4; vs Cache-MoE 1.94-2.12x"
+   },
+   {
+    "claim": "relies on grouping similar tokens",
+    "correct": "wrong",
+    "true_value": "token scheduler gives only 1.03-1.19x; gain is predictor + predictive cache"
+   },
+   {
+    "claim": "first pass numbers (v2)",
+    "correct": "yes",
+    "true_value": "but catalog cites v1 whose TS numbers are 1.09-1.19x"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU A40, batch>=4, headline on top-1 Switch, predictor must be trained per model, no NVMe, no batch 1",
+  "quality_loss": "none (prefetch only, mispredictions corrected)",
+  "ablation": "TS alone, PLEC vs LRU hit ratio, pipeline overhead",
+  "limitations": "batch-1 not evaluated; larger batch lowers hit ratio",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0107",
+  "title": "Dynamic Expert Sharing: Decoupling Memory from Parallelism in MoE Diffusion LLMs (Chen et al.; arXiv 2602.00879v1, 31 Jan 2026)",
+  "id_read": "2602.00879v1",
+  "raw_text_read": true,
+  "setup": "LLaDA2.0-Mini 16B (256 experts, top-8), LLaDA-MoE-7B (64 experts); block length 32; NVIDIA B200 + Xeon 6960P; baselines top-k=4, NAEE, MC-MoE",
+  "numbers": [
+   {
+    "what": "unique experts per layer, Mini",
+    "value": "84 -> 38 (DES-Vote beta .15)",
+    "baseline": "vanilla",
+    "ratio": "0.45x; accuracy 99.5%",
+    "where": "Table 1"
+   },
+   {
+    "what": "DES-Seq k=3",
+    "value": "45 unique, 97.2%",
+    "baseline": "vanilla 84",
+    "ratio": "",
+    "where": "Table 1"
+   },
+   {
+    "what": "LLaDA-MoE",
+    "value": "59 -> 38, 97.6%",
+    "baseline": "vanilla",
+    "ratio": "",
+    "where": "Table 1"
+   },
+   {
+    "what": "MoE-layer latency",
+    "value": "-38.0% (Mini), -31.9% (LLaDA-MoE)",
+    "baseline": "vanilla",
+    "ratio": "",
+    "where": "Fig 5"
+   },
+   {
+    "what": "end-to-end GPU kernel time",
+    "value": "-8.2% to -14.3%",
+    "baseline": "vanilla",
+    "ratio": "",
+    "where": "Fig 5"
+   },
+   {
+    "what": "sharing within block (my arithmetic)",
+    "value": "3.05x measured vs 1.57x random",
+    "baseline": "",
+    "ratio": "1.94x real/random",
+    "where": "Table 1 + formula Sec 3"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "unique experts grow nearly linearly with parallel tokens",
+    "correct": "yes",
+    "true_value": "abstract wording"
+   },
+   {
+    "claim": "independent-token batching activates disparate experts",
+    "correct": "yes",
+    "true_value": "intro"
+   },
+   {
+    "claim": "first pass 84->38, -38%, -8.2..-14.3%",
+    "correct": "yes",
+    "true_value": "Table 1, Fig 5"
+   }
+  ],
+  "transfers": "no",
+  "why": "Diffusion decoding, GPU HBM, lossy routing; only diagnosis transfers",
+  "quality_loss": "avg relative accuracy 99.5% to 96.4% (Mini), 97.6-96.0% (LLaDA-MoE); NAEE 46.6%",
+  "ablation": "coreset size, block size, Seq vs Vote, fused kernel",
+  "limitations": "none stated in a dedicated section",
+  "contradicts_our_findings": "no (supports: real/random sharing ratio ~1.94 vs our 2.0)",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0109",
+  "title": "MoE-Lightning (arXiv 2411.11217, abs page; same paper as P-0104)",
+  "id_read": "2411.11217v1",
+  "raw_text_read": true,
+  "setup": "see P-0104",
+  "numbers": [
+   {
+    "what": "10.3x",
+    "value": "10.3x",
+    "baseline": "best baseline per caption",
+    "ratio": "",
+    "where": "Abstract"
+   },
+   {
+    "what": "3.5x padded",
+    "value": "3.5x",
+    "baseline": "FlexGen",
+    "ratio": "",
+    "where": "Intro, Sec 5.2, Conclusion"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "up to 10.3x (3.5x with padding) Mixtral 8x7B T4 16GB",
+    "correct": "yes",
+    "true_value": "10.3x also tied to L4 in caption; 3.5x is in intro not the arXiv abstract"
+   }
+  ],
+  "transfers": "no",
+  "why": "see P-0104",
+  "quality_loss": "none",
+  "ablation": "see P-0104",
+  "limitations": "see P-0104",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0110",
+  "title": "Klotski: Efficient Mixture-of-Expert Inference via Expert-Aware Multi-Batch Pipeline (Fang et al.; arXiv 2502.06888v1, 9 Feb 2025)",
+  "id_read": "2502.06888v1",
+  "raw_text_read": true,
+  "setup": "Env1 RTX3090 24GB + Xeon 5318Y 256GB + SSD 1GB/s; Env2 H800 80GB, 800GB; Mixtral 8x7B/8x22B bf16; wikitext-103, in 512 out 32, batch 4-64, n up to 15 batches; baselines Accelerate, FastGen, FlexGen, Fiddler, MoE-Infinity",
+  "numbers": [
+   {
+    "what": "max speedups",
+    "value": "85.12x, 15.45x, 2.23x, 19.06x, 9.53x",
+    "baseline": "Accelerate, FastGen, FlexGen, MoE-Infinity, Fiddler",
+    "ratio": "as stated",
+    "where": "Sec 9.2"
+   },
+   {
+    "what": "batch 128 vs FlexGen",
+    "value": "53 vs 46 tok/s",
+    "baseline": "FlexGen",
+    "ratio": "1.15x",
+    "where": "Sec 9.2"
+   },
+   {
+    "what": "Table 3 8x7B Env1",
+    "value": "22.414",
+    "baseline": "simple pipeline 5.721",
+    "ratio": "3.92x (multi-batch alone 18.24 -> 3.19x)",
+    "where": "Table 3"
+   },
+   {
+    "what": "Table 3 8x22B Env2",
+    "value": "52.85",
+    "baseline": "1.149",
+    "ratio": "46.0x",
+    "where": "Table 3"
+   },
+   {
+    "what": "8x22B Env1 final",
+    "value": "1.325 tok/s",
+    "baseline": "",
+    "ratio": "",
+    "where": "Table 3, conclusion"
+   },
+   {
+    "what": "hot-expert prediction accuracy",
+    "value": "58.89%",
+    "baseline": "single-sequence 42.24%",
+    "ratio": "",
+    "where": "Sec 9.6"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "self-reported up to 85x",
+    "correct": "yes",
+    "true_value": "85.12x vs Accelerate, weakest; vs FlexGen 2.23x"
+   },
+   {
+    "claim": "first pass numbers",
+    "correct": "yes",
+    "true_value": "all match"
+   },
+   {
+    "claim": "first pass: batch 1 not supported",
+    "correct": "partly",
+    "true_value": "batch 1 not evaluated (batches 4-64)"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU, many batches in flight, aggregate throughput (per-sequence ~0.002 tok/s for 8x22B Env1, my arithmetic)",
+  "quality_loss": "none (quantised variant accuracy not reported)",
+  "ablation": "Table 3: multi-batch dominant, hot prefetch +4.6%, reorder +17.5%",
+  "limitations": "trade-offs in n and KV cache; throughput-oriented",
+  "contradicts_our_findings": "no",
+  "unread_reason": null
+ }
+]

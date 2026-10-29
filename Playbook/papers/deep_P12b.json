@@ -1,0 +1,549 @@
+[
+ {
+  "method_row_id": "P-0267",
+  "title": "Fast JSON Decoding for Local LLMs with Compressed Finite State Machine (Yin, Sheng, Zheng, LMSYS blog, 5 Feb 2024)",
+  "id_read": "lmsys.org/blog/2024-02-05-compressed-fsm",
+  "raw_text_read": true,
+  "setup": "Llama-7B, A10 24GB, vllm 0.2.7/guidance 0.1.0/outlines 0.2.5/llama.cpp py 0.2.38; batch 1 latency, max-batch throughput",
+  "numbers": [
+   {
+    "what": "latency reduction",
+    "value": "up to 2x",
+    "baseline": "guidance+llama.cpp, outlines+vLLM",
+    "ratio": "n/a (chart)",
+    "where": "Fig 6"
+   },
+   {
+    "what": "throughput",
+    "value": "up to 2.5x",
+    "baseline": "same",
+    "ratio": "n/a",
+    "where": "Fig 6"
+   },
+   {
+    "what": "retokenization overhead",
+    "value": "about 4%",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "text"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "2x latency",
+    "correct": "yes",
+    "true_value": "up to 2x"
+   },
+   {
+    "claim": "2.5x throughput",
+    "correct": "yes",
+    "true_value": "up to 2.5x"
+   },
+   {
+    "claim": "4% retokenization",
+    "correct": "yes",
+    "true_value": "about 4%"
+   }
+  ],
+  "transfers": "partly",
+  "why": "mechanism transfers; GPU dense 7B with resident weights, part of gain from slow baseline overhead",
+  "quality_loss": "no benchmark; tokenization of forced text changes later logits, mitigated by retokenizing",
+  "ablation": "none (SGLang without jump-forward only noted vs outlines)",
+  "limitations": "tokenization boundary issues",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0268",
+  "title": "SGLang: Efficient Execution of Structured Language Model Programs (Zheng et al.)",
+  "id_read": "arXiv 2312.07104v2",
+  "raw_text_read": true,
+  "setup": "Llama-2 7B A10G; Mixtral-8x7B 8xA10G TP; Llama-70B 4xA100; baselines Guidance 0.1.8, vLLM 0.2.5, LMQL 0.7.3",
+  "numbers": [
+   {
+    "what": "throughput up to",
+    "value": "6.4x",
+    "baseline": "Guidance/vLLM/LMQL",
+    "ratio": "6.4",
+    "where": "Sec 6.2 (not JSON)"
+   },
+   {
+    "what": "compressed FSM on JSON",
+    "value": "1.6x throughput",
+    "baseline": "SGLang without compressed FSM",
+    "ratio": "1.6",
+    "where": "Sec 6.4"
+   },
+   {
+    "what": "no FSM reuse",
+    "value": "2.4x lower throughput",
+    "baseline": "with reuse",
+    "ratio": "0.42",
+    "where": "Sec 6.4"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "JSON ~1.6x",
+    "correct": "yes",
+    "true_value": "1.6x"
+   },
+   {
+    "claim": "6.4x overall",
+    "correct": "yes",
+    "true_value": "overall, not JSON"
+   },
+   {
+    "claim": "hardware list",
+    "correct": "yes",
+    "true_value": "as stated"
+   }
+  ],
+  "transfers": "partly",
+  "why": "mechanism yes; batched GPU numbers",
+  "quality_loss": "not measured; App B.3 admits distorted probabilities",
+  "ablation": "compressed FSM on/off 1.6x",
+  "limitations": "probability skew, FSM preprocessing",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0269",
+  "title": "XGrammar: Flexible and Efficient Structured Generation Engine for LLMs (Dong et al., MLSys 2025)",
+  "id_read": "arXiv 2411.15100v3",
+  "raw_text_read": true,
+  "setup": "App B: Llama-3.1-8B SGLang, Ryzen 9 7950X + RTX 4090, batch 1, TPOT; main: H100 + EPYC 7R13",
+  "numbers": [
+   {
+    "what": "Outlines TPOT without/with jump-forward",
+    "value": "44.2 / 31.5 ms (mapping inferred)",
+    "baseline": "-",
+    "ratio": "1.40x",
+    "where": "Fig 11"
+   },
+   {
+    "what": "XGrammar TPOT without/with jump-forward",
+    "value": "6.8 / 5.4 ms",
+    "baseline": "-",
+    "ratio": "1.26x",
+    "where": "Fig 11"
+   },
+   {
+    "what": "XGrammar vs Outlines",
+    "value": "6.8 vs 44.2 ms",
+    "baseline": "Outlines",
+    "ratio": "6.5x",
+    "where": "Table 1"
+   },
+   {
+    "what": "DeepSeek-V2-Lite 16B MoE",
+    "value": "4.8 vs 15.8 ms",
+    "baseline": "SGLang+Outlines",
+    "ratio": "3.3x",
+    "where": "Table 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "jump-forward + masking best TPOT",
+    "correct": "yes",
+    "true_value": "Fig 11"
+   },
+   {
+    "claim": "first pass: no numeric result readable",
+    "correct": "no",
+    "true_value": "values readable: 44.2/31.5/6.8/5.4"
+   },
+   {
+    "claim": "abstract up to 100x",
+    "correct": "yes",
+    "true_value": "mask-engine microbenchmark"
+   }
+  ],
+  "transfers": "partly",
+  "why": "mechanism yes; GPU TPOT, mask-dominated baseline",
+  "quality_loss": "none (exact masks)",
+  "ablation": "Fig 11 jump-forward on/off",
+  "limitations": "jump-forward is orthogonal appendix material",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0270",
+  "title": "llguidance fast-forward tokens (guidance-ai/llguidance docs/fast_forward.md, README; llama.cpp PR 10224)",
+  "id_read": "raw GitHub docs + PR API JSON",
+  "raw_text_read": true,
+  "setup": "Rust library, Llama-3 128k tokenizer, MaskBench; no model/hardware speed benchmark",
+  "numbers": [
+   {
+    "what": "mask time",
+    "value": "50 us/token",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "README"
+   },
+   {
+    "what": "typical schema mask",
+    "value": "1.5 ms",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "README"
+   },
+   {
+    "what": "forced token share",
+    "value": "12.7% (12.1% conservative)",
+    "baseline": "-",
+    "ratio": "at most 1.15x",
+    "where": "fast_forward.md"
+   },
+   {
+    "what": "non canonical without healing",
+    "value": "97%",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "fast_forward.md"
+   },
+   {
+    "what": "non canonical max_tokens=1",
+    "value": "23 of ~10k",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "fast_forward.md"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "llama.cpp can use llguidance",
+    "correct": "yes",
+    "true_value": "masking only; PR says fast-forward not hooked up; llama.cpp doc silent"
+   },
+   {
+    "claim": "first pass numbers",
+    "correct": "yes",
+    "true_value": "as listed"
+   }
+  ],
+  "transfers": "partly",
+  "why": "CPU mask trivial; fast-forward batching not available in llama.cpp via this path",
+  "quality_loss": "naive forcing damages distribution; canonical safeguard removes it; no benchmark",
+  "ablation": "max_tokens canonicalization depth",
+  "limitations": "string-based tokenizers; heuristic depth 4",
+  "contradicts_our_findings": "yes in magnitude: published f 12.7% vs our synthetic f 0.44-0.61",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0271",
+  "title": "Structured Decoding in vLLM: A Gentle Introduction (Aaron Pham, BentoML, 15 Jan 2025)",
+  "id_read": "bentoml.com blog",
+  "raw_text_read": true,
+  "setup": "vLLM v0 GPU, Outlines vs XGrammar; charts images",
+  "numbers": [
+   {
+    "what": "TPOT improvement under load",
+    "value": "up to 5x",
+    "baseline": "Outlines backend",
+    "ratio": "5",
+    "where": "TL;DR"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "jump-forward needs prefill of k tokens not logit processors",
+    "correct": "yes",
+    "true_value": "text says so"
+   },
+   {
+    "claim": "saving is batching, not zero work",
+    "correct": "absent",
+    "true_value": "not on page"
+   },
+   {
+    "claim": "first pass: wrong",
+    "correct": "partly",
+    "true_value": "half correct"
+   }
+  ],
+  "transfers": "no",
+  "why": "secondary blog, no jump-forward data; 5x is mask overhead",
+  "quality_loss": "none",
+  "ablation": "none",
+  "limitations": "none; v1 plan",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0272",
+  "title": "Earley-Driven Dynamic Pruning for Efficient Structured Decoding (Sun, Wei, Tian, Ni; ICML 2025)",
+  "id_read": "arXiv 2506.01151v1",
+  "raw_text_read": true,
+  "setup": "RTX 3090 + EPYC 7452; Gemma-2-9b, Llama-3-8B, Mistral-7B, Qwen2.5-7B FP16; baselines lm-format-enforcer, Outlines, XGrammar",
+  "numbers": [
+   {
+    "what": "Gemma geoquery",
+    "value": "12174.68 tok/s",
+    "baseline": "XGrammar 616.66",
+    "ratio": "19.7x",
+    "where": "Table 1"
+   },
+   {
+    "what": "Gemma json schema",
+    "value": "7943.34",
+    "baseline": "XGrammar 1473.99",
+    "ratio": "5.4x",
+    "where": "Table 1"
+   },
+   {
+    "what": "Mistral json grammar",
+    "value": "12046.54",
+    "baseline": "XGrammar 15273.72",
+    "ratio": "0.79x",
+    "where": "Table 1"
+   },
+   {
+    "what": "headline",
+    "value": "up to 2x / 1.5-2x",
+    "baseline": "SOTA",
+    "ratio": "-",
+    "where": "abstract, Sec 6"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "is a review of DOMINO/Formatron",
+    "correct": "no",
+    "true_value": "method paper; no DOMINO, no jump-forward in text"
+   },
+   {
+    "claim": "1.5-2x from skipping forced forwards",
+    "correct": "no",
+    "true_value": "from pruning/caching of Earley mask"
+   },
+   {
+    "claim": "1.5-2x",
+    "correct": "yes",
+    "true_value": "authors headline; own Table 1 ranges 0.79x to 19.7x vs XGrammar"
+   },
+   {
+    "claim": "first pass 20x cell",
+    "correct": "yes",
+    "true_value": "19.7x"
+   }
+  ],
+  "transfers": "no",
+  "why": "mask throughput; irrelevant against expert I/O on CPU/NVMe",
+  "quality_loss": "Table 7 accuracy comparable to baselines",
+  "ablation": "Table 3 pruning removal -30 to -50%",
+  "limitations": "none stated",
+  "contradicts_our_findings": "F.md says DOMINO/Formatron consistent with 1.3-2.3x range: not valid, they measure mask speed",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0274",
+  "title": "Dynamic Expert Quantization for Scalable Mixture-of-Experts Inference (DynaExq; Chu et al.)",
+  "id_read": "arXiv 2511.15015v4",
+  "raw_text_read": true,
+  "setup": "RTX A6000 48GB; Qwen3-30B-A3B (30.5B/3.3B, 48x128 top-8), Qwen3-Next-80B (80B/3B, 41GB Int4, 48x512+1 shared, top-10), Phi-3.5-MoE (42B/6.6B, 32x16 top-2); HF Transformers; baselines static Int4/Int2, ExpertFlow",
+  "numbers": [
+   {
+    "what": "throughput vs ExpertFlow",
+    "value": "1.42x to 2.73x (2.73x at batch 32 per abstract)",
+    "baseline": "ExpertFlow",
+    "ratio": "as stated; raw tok/s only in figures",
+    "where": "Sec 5.3"
+   },
+   {
+    "what": "80B avg accuracy",
+    "value": "77.57",
+    "baseline": "static Int2 73.09 / Int4 78.11",
+    "ratio": "+4.48 / -0.54",
+    "where": "Table 4"
+   },
+   {
+    "what": "30B avg",
+    "value": "64.38",
+    "baseline": "FP16 65.29, Int4 63.98",
+    "ratio": "-0.91 / +0.40",
+    "where": "Table 4"
+   },
+   {
+    "what": "decode expert activation 80B",
+    "value": "1.9% at batch 1, 39.2% at batch 32",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Table 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "2.73x at batch 32",
+    "correct": "yes",
+    "true_value": "abstract"
+   },
+   {
+    "claim": "vs offload/prefetch baselines",
+    "correct": "partly",
+    "true_value": "only ExpertFlow"
+   },
+   {
+    "claim": "73.09->77.57",
+    "correct": "yes",
+    "true_value": "Table 4"
+   },
+   {
+    "claim": "48x512 top-10",
+    "correct": "yes",
+    "true_value": "plus 1 shared, 3B active"
+   }
+  ],
+  "transfers": "partly",
+  "why": "concept transfers; GPU HBM budget, batch up to 32, 80B Int4 fits in 48GB; batch 1 decode activates 1.9% of experts",
+  "quality_loss": "see Table 4",
+  "ablation": "none isolating cache vs precision",
+  "limitations": "GPU single device",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0275",
+  "title": "Any-Precision LLM: Low-Cost Deployment of Multiple, Different-Sized LLMs (Park et al., ICML 2024) and SNU-ARC repo",
+  "id_read": "arXiv 2402.10517v4 + repo README",
+  "raw_text_read": true,
+  "setup": "SqueezeLLM non-uniform + incremental upscaling, 3-bit seed to 8-bit parent, bit-plane CUDA kernel; Llama-2-7B, Mistral-7B, OPT; RTX 4090, 4070 Laptop, Jetson AGX Orin 64GB; TensorRT-LLM",
+  "numbers": [
+   {
+    "what": "memory {3..8} Llama-2-7B",
+    "value": "8.4 GB",
+    "baseline": "separate 29.9 GB",
+    "ratio": "3.56x",
+    "where": "Table 1"
+   },
+   {
+    "what": "wiki ppl 4-bit",
+    "value": "5.62",
+    "baseline": "independent 5.61",
+    "ratio": "+0.01",
+    "where": "Table 3"
+   },
+   {
+    "what": "worst ppl delta",
+    "value": "+0.23 (OPT-6.7B PTB 4-bit)",
+    "baseline": "independent",
+    "ratio": "-",
+    "where": "Table 3"
+   },
+   {
+    "what": "3-bit matvec vs cuBLAS FP16",
+    "value": "x4.67 RTX4090 (4096x11008)",
+    "baseline": "FP16",
+    "ratio": "4.67",
+    "where": "Table 6"
+   },
+   {
+    "what": "8-bit",
+    "value": "x1.78",
+    "baseline": "FP16",
+    "ratio": "1.78",
+    "where": "Table 6"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "first pass no quantitative result",
+    "correct": "no",
+    "true_value": "Tables 1-6, Fig 12 exist"
+   },
+   {
+    "claim": "seed 3 bits",
+    "correct": "yes",
+    "true_value": "README default 3"
+   },
+   {
+    "claim": "lower precision from MSB",
+    "correct": "partly",
+    "true_value": "each bit-width has its own centroid table"
+   }
+  ],
+  "transfers": "partly",
+  "why": "layout yes, CUDA kernel no, dense only, seed 3 bits",
+  "quality_loss": "<0.1 ppl vs independent at 4-8 bit (two OPT cases larger); uniform quant upscaling fails (AWQ+IU INF at 4-bit)",
+  "ablation": "kernel opts Fig 10; IU vs independent",
+  "limitations": "needs non-uniform clustering backbone; GPU engine",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0276",
+  "title": "AnyBCQ: Hardware Efficient Flexible Binary-Coded Quantization for Multi-Precision LLMs (Park et al., ICLR 2026)",
+  "id_read": "arXiv 2510.10467v2",
+  "raw_text_read": true,
+  "setup": "Llama-3.1-8B, Gemma-2-9B, Phi-4-14B; A100 80GB (H100 appendix); baselines AWQ, Any-Precision, ShiftAddLLM, FP16",
+  "numbers": [
+   {
+    "what": "2-bit decode tok/s Llama-3.1-8B",
+    "value": "245",
+    "baseline": "AP 228 / FP16 105",
+    "ratio": "1.07x / 2.33x",
+    "where": "Table 4"
+   },
+   {
+    "what": "2-bit Phi-4-14B",
+    "value": "171",
+    "baseline": "FP16 56",
+    "ratio": "3.05x",
+    "where": "Table 4/8"
+   },
+   {
+    "what": "2-bit CSR avg",
+    "value": "58.71",
+    "baseline": "FP16 72.72",
+    "ratio": "-14.0 pts",
+    "where": "Table 2"
+   },
+   {
+    "what": "2-bit MMLU",
+    "value": "35.32",
+    "baseline": "FP16 65.35 (Table 4)",
+    "ratio": "-30 pts",
+    "where": "Table 4"
+   },
+   {
+    "what": "2-bit wiki ppl",
+    "value": "19.01",
+    "baseline": "FP16 6.24, AP 1680.77",
+    "ratio": "3.0x",
+    "where": "Table 4"
+   },
+   {
+    "what": "memory",
+    "value": "4.99 GB",
+    "baseline": "multi-model 9.85 GB",
+    "ratio": "-49%",
+    "where": "Table 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "245 vs 228 vs 105",
+    "correct": "yes",
+    "true_value": "Table 4"
+   },
+   {
+    "claim": "up to 3.0x",
+    "correct": "yes",
+    "true_value": "Phi-4 3.05x"
+   },
+   {
+    "claim": "CSR 58.71 vs 72.72",
+    "correct": "yes",
+    "true_value": "Table 2"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU dense; large 2-bit quality gap",
+  "quality_loss": "2-bit large drop as above",
+  "ablation": "fixed vs multi precision; kernel breakdown",
+  "limitations": "BCQ capacity limits peak accuracy at high bits; empirical only",
+  "contradicts_our_findings": "no (supports quality-unmeasured caveat)",
+  "unread_reason": ""
+ }
+]

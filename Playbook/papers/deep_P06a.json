@@ -1,0 +1,904 @@
+[
+ {
+  "method_row_id": "P-0121",
+  "title": "mbolt 0.1.0: Profile-guided layout optimization for GGUF MoE models (PyPI mbolt, github doramirdor/mbolt; author Dor Amir; no paper)",
+  "id_read": "PyPI JSON (version 0.1.0, uploaded 2026-07-13); GitHub README.md raw; results/phase0-gate.md, phase1-report.md, phase2-report.md raw; mlx-lm issue #1438 (32 comments) via GitHub API; repo API (8 stars, created 2026-07-13, last push 2026-07-22)",
+  "raw_text_read": true,
+  "setup": "Phase 2 / README table: Qwen3-Next-80B-A3B-Instruct UD-IQ3_XXS, 33.1 GB, 48 layers x 512 experts, top-10 (same geometry class as ours); Apple M5 Pro MacBook Pro 64 GB (phase0 report), Apple SSD AP1024Z 1 TB NVMe; CPU experts (-ot ffn_exps=CPU); 24 GB mlocked 'squeeze' (phase2 section 3; sensitivity row 32 GB squeeze, which the report calls 'tighter memory' although 32>24: the two squeeze labels are inconsistent in the text); 128 tokens, 3 reps, medians; baseline = stock GGUF + stock llama.cpp mmap fault path. Phase 0 replay used Qwen3-30B-A3B IQ3_XXS (128 experts, top-8, slices 588-816 KiB), 200 prompts, trained on first 80% (60,618 tokens), tested on held-out 15,155 tokens; physical replay, QD1.",
+  "numbers": [
+   {
+    "what": "e2e tok/s stock file stock llama.cpp",
+    "value": "5.80",
+    "baseline": "-",
+    "ratio": "1.00",
+    "where": "README 'The numbers'; phase2 sec.3"
+   },
+   {
+    "what": "e2e stock file + explicit-read prefetcher",
+    "value": "7.60",
+    "baseline": "5.80",
+    "ratio": "1.31",
+    "where": "README"
+   },
+   {
+    "what": "e2e reorder (chain+pipeline) + prefetcher",
+    "value": "8.00",
+    "baseline": "5.80 stock / 7.60 stock+pf",
+    "ratio": "1.38 vs stock; 1.053 vs prefetcher alone (own calc)",
+    "where": "README"
+   },
+   {
+    "what": "e2e interleave (up|gate|down contiguous) + prefetcher",
+    "value": "9.00",
+    "baseline": "5.80 stock / 7.60 stock+pf / 8.00 reorder+pf",
+    "ratio": "1.55 vs stock; 1.184 vs prefetcher alone; 1.125 vs reorder+pf (own calc)",
+    "where": "README"
+   },
+   {
+    "what": "e2e interleave with fault streaming (no prefetcher)",
+    "value": "5.70",
+    "baseline": "5.80",
+    "ratio": "0.98",
+    "where": "phase2 sec.3: layout alone does nothing under mmap"
+   },
+   {
+    "what": "32 GB squeeze: stock / stock+pf / interleave / interleave+pf",
+    "value": "6.00 / 9.10 / 6.10 / 9.80",
+    "baseline": "6.00",
+    "ratio": "1.52 / 1.02 / 1.63; layout increment over prefetcher 9.80/9.10 = 1.077",
+    "where": "phase2 sec.3 sensitivity (squeeze32.log)"
+   },
+   {
+    "what": "storage-level reads/token, cold, held-out replay on physical files",
+    "value": "1418 -> ~370; 301.7 -> 135.4 ms/token",
+    "baseline": "stock file",
+    "ratio": "2.23x (sim predicted 2.29x)",
+    "where": "phase2 sec.3 table"
+   },
+   {
+    "what": "prefetcher counters",
+    "value": "28.6k -> 8.5k reads for ~13 GB; avg read 450 KB -> 1.5 MB",
+    "baseline": "stock",
+    "ratio": "3.3x fewer reads",
+    "where": "phase2 sec.3"
+   },
+   {
+    "what": "Phase 0 replay (30B, warm-32/128 LRU slots) chain+pipeline",
+    "value": "1.23x warm, 1.27x cold; chain alone 1.14x; clique 1.11x; heat 1.06x; interleave 1.59x/1.78x",
+    "baseline": "stock layout",
+    "ratio": "-",
+    "where": "phase0-gate.md table; CV 11-14%"
+   },
+   {
+    "what": "Phase 0 fit I/O model t = reads*L + bytes/B",
+    "value": "L=73 us, B=11.3 GB/s, R2=0.956; modeled chain+pipeline 1.10x vs measured 1.23x on this Mac; PCIe4 NVMe 1.07x, PCIe3 1.05x, SATA/USB 1.03x; interleave 1.42/1.28/1.12x",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "phase0-gate.md"
+   },
+   {
+    "what": "cross-domain: layout trained on dolly applied to code",
+    "value": "1.22x (in-domain 1.46x, mixed 1.61x)",
+    "baseline": "stock",
+    "ratio": "-",
+    "where": "README (phase1 data, not re-derived by me)"
+   },
+   {
+    "what": "independent MLX cross-check (third parties, mlx-lm#1438), coalesce lever A2 (9 slices to 1 read) Qwen3.6-35B-A3B-8bit",
+    "value": "I/O 2.34x; decode +17.6% at 0.3 resident, +14.3% at 0.45",
+    "baseline": "MLX offload reader with shared fds and 8-way pool",
+    "ratio": "-",
+    "where": "comment by mabaeyens 2026-07-20"
+   },
+   {
+    "what": "same, gpt-oss-120b MXFP4 (~4 MB slices, 56.7 GiB table, 32 GB RAM)",
+    "value": "A2 I/O 1.29x, A1 1.08x, e2e +9.7% (read share 39.3%)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "same thread 2026-07-20 13:37"
+   },
+   {
+    "what": "same, Qwen3-235B-A22B 4-bit, fraction 0.2, M5 Pro 48 GB (A1 only: 9 preads to 3)",
+    "value": "1.677 -> 2.218 tok/s decode (+32.3%), TTFT 13.34 -> 9.83 s (-26.3%), preads/token 2394 -> 798",
+    "baseline": "stock reads",
+    "ratio": "1.32x decode",
+    "where": "comment by lBroth 2026-07-20 16:55; author states per-read gain only 1.339x by formula, the rest is read share near 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "1.55-1.63x faster memory-squeezed MoE streaming in llama.cpp",
+    "correct": "yes",
+    "true_value": "9.00/5.80=1.552 (24 GB squeeze) and 9.80/6.00=1.633 (32 GB squeeze). But baseline is stock mmap; the author's own explicit-read prefetcher alone gives 1.31x / 1.52x, so the layout share is 1.18x / 1.08x"
+   },
+   {
+    "claim": "2.23x at the storage level",
+    "correct": "yes",
+    "true_value": "1418 -> ~370 reads/token, 301.7 -> 135.4 ms; this is the INTERLEAVE layout (up|gate|down contiguous), not co-activation reorder"
+   },
+   {
+    "claim": "rewrites GGUF byte-exact (+0.003% size)",
+    "correct": "yes",
+    "true_value": "phase2: '+0.003 % file size' for interleave; weights byte-exact claimed, KLD 0.00096, top-1 98.9% (README) - output is not token-identical under any permutation per the author"
+   },
+   {
+    "claim": "repo github",
+    "correct": "yes",
+    "true_value": "github.com/doramirdor/mbolt, 8 stars, created 2026-07-13"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Same expert geometry (512 experts, top-10, CPU experts, NVMe streaming, batch 1) so it is the closest published regime. But (a) only 33 GB model squeezed to 24-32 GB RAM, we have 69 GB vs 8-32 GB; (b) most of the end-to-end gain is the explicit-read prefetcher (1.31x/1.52x) and the interleave, not the co-activation reorder (1.05x over prefetcher, 1.08x at 32 GB); (c) layout is invisible to mmap faults; (d) self-reported, one machine, N=3, 8 stars; (e) the author states profile-free coalescing carries ~90% of the win and the clique reorder adds ~12% of read ops at decode, and that plain LRU beats any pinned set and cross-layer prefetch is a null.",
+  "quality_loss": "Weights byte-exact; routing equivalence 100.000% through the permutation at equal inputs; KLD 0.00096 and top-1 agreement 98.9% (5x below CPU vs Metal backend delta) per README; author notes token-identity is impossible under any expert permutation (floating-point sum order). No benchmark scores.",
+  "ablation": "Yes and it isolates what we need: stock+pf 7.60, reorder+pf 8.00, interleave+pf 9.00, interleave without pf 5.70 (README, phase2). Phase 0 replay ablation: heat 1.06, pipeline 1.07, clique 1.11, chain 1.14, clique+pipeline 1.23, chain+pipeline 1.23, interleave 1.59 (warm 32/128).",
+  "limitations": "Authors state: gains scale with I/O-boundness (model >= RAM); layout only pays with explicit reads (mmap parity measured); big ~4 MB slices cap per-read gain at ~1.3x; moderate ratios with big slices weak (~+10%); LRU-caching engines see +14-18% not the no-retention numbers; trace should resemble deployment (matched tracing worth ~20-30%); single machine; baseline varied between sessions (5.8 vs 10.0 across days, within-session ratios only); interleave is CPU-experts only.",
+  "contradicts_our_findings": "No. It confirms them: our leave-one-out reorder gain 1.045x serial / 1.073x overlapped at 8 GB, 1.003x at 16 GB and 1.000x at 32 GB (pubtech/C.md) matches mbolt's 1.053x over the prefetcher and 1.077x at 32 GB squeeze; our held-out run length 1.35 on 128-expert traces; mbolt's own simulator over-predicted (modeled 1.10x, replay 1.23x, real e2e 1.05x). What changes: the large lever is the contiguous per-expert interleave (our family #19 repack), 2.23x I/O and 1.18x e2e over the prefetcher; do not credit it to co-activation reorder.",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0122",
+  "title": "LLM in a flash: Efficient Large Language Model Inference with Limited Memory (Keivan Alizadeh, Iman Mirzadeh, Dmitry Belenko, S. Karen Khatamifard, Minsik Cho, Carlo C Del Mundo, Mohammad Rastegari, Mehrdad Farajtabar; Apple; ACL 2024)",
+  "id_read": "arXiv:2312.11514v3 [cs.CL] 30 Jul 2024, PDF via pdftotext (139,904 chars)",
+  "raw_text_read": true,
+  "setup": "OPT 6.7B (ReLU), sparsified Falcon 7B, Phi-2, Persimmon 8B, Llama 2 7B (FATReLU); dense FFN neurons, no experts. Hardware: Apple M1 Max 1 TB SSD, Apple M2 Ultra 2 TB SSD (CPU float32 or Metal float16), Linux box with RTX 4090 24 GB (bf16). About half of the model allowed in DRAM. Flash throughput: 6.10 GB/s dense sequential, 1.25 GB/s sparse reads, 2.25 GB/s with bundling; 32 reader threads; reads without OS caching (purge). Data: C4 validation, 128-token prompt, 256 generated tokens. Baselines: naive (reload on demand, best theoretical I/O numbers used, 'real number might be higher') and hybrid (half in DRAM, half loaded). Software: HF Transformers + PyTorch + custom binary extension.",
+  "numbers": [
+   {
+    "what": "Table 2 OPT 6.7B on M1 Max I/O latency: naive",
+    "value": "13.4 GB, 6.10 GB/s, 2196 ms",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Table 2"
+   },
+   {
+    "what": "Table 2 hybrid",
+    "value": "6.7 GB, 1090 ms",
+    "baseline": "2196",
+    "ratio": "2.01",
+    "where": "Table 2"
+   },
+   {
+    "what": "Table 2 + predictor",
+    "value": "0.9 GB, 1.25 GB/s, 738 ms",
+    "baseline": "1090",
+    "ratio": "1.48",
+    "where": "Table 2"
+   },
+   {
+    "what": "Table 2 + windowing",
+    "value": "0.2 GB, 164 ms",
+    "baseline": "738",
+    "ratio": "4.50",
+    "where": "Table 2"
+   },
+   {
+    "what": "Table 2 + row-column bundling",
+    "value": "0.2 GB, 2.25 GB/s, 87 ms",
+    "baseline": "164",
+    "ratio": "1.885 (throughput 1.8x); vs naive 25.2x",
+    "where": "Table 2"
+   },
+   {
+    "what": "Table 3 OPT 6.7B CPU total latency",
+    "value": "3182 -> 669 ms",
+    "baseline": "naive",
+    "ratio": "4.76",
+    "where": "Table 3"
+   },
+   {
+    "what": "Table 3 OPT 6.7B Metal M1 / Metal M2 / GPU",
+    "value": "2389->565 / 2270->305 / 2218->84 ms",
+    "baseline": "naive",
+    "ratio": "4.23 / 7.44 / 26.4",
+    "where": "Table 3"
+   },
+   {
+    "what": "Table 3 Falcon 7B CPU",
+    "value": "3095 naive, 1947 hybrid, 706 all",
+    "baseline": "naive / hybrid",
+    "ratio": "4.38 / 2.76",
+    "where": "Table 3"
+   },
+   {
+    "what": "Table 3 Persimmon 8B CPU",
+    "value": "3806 / 2495 / 1041",
+    "baseline": "naive / hybrid",
+    "ratio": "3.66 / 2.40",
+    "where": "Table 3"
+   },
+   {
+    "what": "Table 3 Phi-2 CPU",
+    "value": "1287 / 711 / 546",
+    "baseline": "naive / hybrid",
+    "ratio": "2.36 / 1.30",
+    "where": "Table 3"
+   },
+   {
+    "what": "Table 3 Llama 2 7B CPU",
+    "value": "3095 / 1903 / 994",
+    "baseline": "naive / hybrid",
+    "ratio": "3.11 / 1.91",
+    "where": "Table 3"
+   },
+   {
+    "what": "Appendix D co-activation bundling",
+    "value": "negative result, no numbers",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec. 3.2 and App. D"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "Row-column bundling to enlarge read chunks works",
+    "correct": "yes",
+    "true_value": "Table 2: 164 -> 87 ms, 1.25 -> 2.25 GB/s; it concatenates an up-projection column with the matching down-projection row (2*d_model*bytes chunk)"
+   },
+   {
+    "claim": "bundling by co-activation was a negative result",
+    "correct": "yes",
+    "true_value": "App. D: bundling a neuron with its closest friend loaded very active neurons repeatedly; hot neurons are the closest friend of many. No quantification in the paper"
+   },
+   {
+    "claim": "(first pass) Table 3 OPT 6.7B CPU 3182 -> 669 ms",
+    "correct": "yes",
+    "true_value": "also Metal M1 2389->565, GPU 2218->84; abstract text says 'up to 4x and 20x', tables compute to 4.76x and 26.4x"
+   },
+   {
+    "claim": "(first pass) bundling takes I/O from 164 to 87 ms",
+    "correct": "yes",
+    "true_value": "it is a cumulative step after windowing; the baseline of that step is already the sparse-read pipeline"
+   }
+  ],
+  "transfers": "no",
+  "why": "Dense ReLU-sparse FFN neurons (predictor decides which neurons), not top-k routed experts; DRAM holds half the model plus a sliding window of recently active neurons, while we have 8-32 GB against 69 GB; baselines are best-case theory, not llama.cpp; Apple SSD with 32 parallel readers. The only transferable pieces are the chunk-size/throughput curve (1.25 -> 2.25 GB/s when chunk doubles), which matches our 0.9 MB -> 4 MiB curve idea, and the negative co-activation-bundling result (qualitative).",
+  "quality_loss": "Predictor-induced: Table 4 e.g. OPT 6.7B ArcEasy 66.1 -> 66.2; Falcon relufied 72.52 -> 70.20 to 72.35 depending on predictor rank; Phi-2 relufied 80.60 -> 78.90-79.96; Llama 2 MMLU 41.8 dense, 38.96 sparsified, 38.63 with predictors (App. C).",
+  "ablation": "Yes (Table 2, cumulative: hybrid, predictor, windowing, bundling) but bundling only in its row-column form; co-activation bundling has no numbers.",
+  "limitations": "Authors: only half of model in DRAM tested; relies on ReLU sparsity (relufied models for Falcon, Phi-2, Llama2); baselines use theoretical best I/O ('real number might be higher'); needs predictors; they note OS buffer cache could improve figures; Metal needs custom extension for dynamic shapes.",
+  "contradicts_our_findings": "No. Consistent with our held-out co-activation reorder being weak (pubtech/C.md family #20). Their row-column bundling is the analogue of our gate/up/down repack (family #19), not of reorder.",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0123",
+  "title": "MoE-Infinity: Efficient MoE Inference on Personal Machines with Sparsity-Aware Expert Cache (Leyang Xue, Yao Fu, Zhan Lu, Chuanhao Sun, Luo Mai, Mahesh Marina; Univ. of Edinburgh)",
+  "id_read": "arXiv:2401.14361v3 [cs.LG] 12 Mar 2025, PDF via pdftotext (84,165 chars)",
+  "raw_text_read": true,
+  "setup": "Models: Switch-128x0.2B (30-100 GB), NLLB-MoE 128x0.4B (220 GB), DeepSeek-V2-Lite 64x2.4B (31 GB), Mixtral-8x7B (120 GB), Snowflake Arctic 128x4B (900 GB). Hardware: one NVIDIA RTX A5000 24 GB, PCIe 4.0 (text 32 GB/s, Table 1 caption 24 GB/s); host DRAM 32 GB (DeepSeek), 64 GB Switch, 256 GB NLLB, 128 GB Mixtral, 1 TB Arctic - every model fully resident in host DRAM. Batch 1, prompt 512, decode 32; 290 tasks from BIGBench/FLAN/MMLU. Baselines: DeepSpeed-Inference, llama.cpp via Ollama (CPU computes offloaded params), Mixtral-Offloading, BrainStorm (re-implemented by authors), vLLM. Request-level Expert Activation Matrix Collection (EAMC) for cache replacement and prefetch.",
+  "numbers": [
+   {
+    "what": "Table 1 DeepSeek-V2-Lite TPOT avg: MoE-Infinity",
+    "value": "155 ms (tail 169; GPU idle 51)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Table 1 p.1"
+   },
+   {
+    "what": "Table 1 vLLM",
+    "value": "485 ms",
+    "baseline": "155",
+    "ratio": "3.13",
+    "where": "Table 1"
+   },
+   {
+    "what": "Table 1 DeepSpeed",
+    "value": "737 ms",
+    "baseline": "155",
+    "ratio": "4.75",
+    "where": "Table 1"
+   },
+   {
+    "what": "Table 1 Mixtral-Offloading",
+    "value": "1250 ms",
+    "baseline": "155",
+    "ratio": "8.06",
+    "where": "Table 1"
+   },
+   {
+    "what": "Table 1 Ollama (llama.cpp)",
+    "value": "2590 ms",
+    "baseline": "155",
+    "ratio": "16.7",
+    "where": "Table 1"
+   },
+   {
+    "what": "Fig. 7 end-to-end TPOT",
+    "value": "Switch 155 ms, NLLB 531 ms, DeepSeek 155 ms, Mixtral 836 ms (worst case, 8 large experts); about 1.4x better than BrainStorm/Mixtral-Offloading on Mixtral",
+    "baseline": "baselines in figure (values only in plot)",
+    "ratio": "1.4 on Mixtral",
+    "where": "Sec. 5.1 text"
+   },
+   {
+    "what": "Headline range",
+    "value": "abstract 3.1-16.7x; conclusion 2.7-13.7x",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Abstract / Sec. 6 (the two disagree inside the paper)"
+   },
+   {
+    "what": "Workload change recovery",
+    "value": "about 50 requests within a dataset, 30 across datasets",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Table 3"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "2-20x over llama.cpp and others",
+    "correct": "no",
+    "true_value": "Abstract 3.1-16.7x, conclusion 2.7-13.7x; max 16.7x is vs Ollama on DeepSeek-V2-Lite"
+   },
+   {
+    "claim": "Activation-aware prefetch/cache from request-level traces",
+    "correct": "yes",
+    "true_value": "EAM = L x E count matrix per request, matched by cosine distance to a collection of past EAMs"
+   },
+   {
+    "claim": "no disk layout",
+    "correct": "yes",
+    "true_value": "no SSD at all: all experts in host DRAM, GPU cache, PCIe"
+   },
+   {
+    "claim": "(first pass) DeepSeek-V2-Lite Table 1 155 ms vs 2590 ms Ollama",
+    "correct": "yes",
+    "true_value": "ratio 16.7"
+   },
+   {
+    "claim": "(first pass) 'host DRAM 32 GB to 1 TB'",
+    "correct": "yes",
+    "true_value": "32 GB for DeepSeek up to 1 TB Arctic"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU cache over PCIe from host DRAM; no NVMe, no CPU compute path except the Ollama baseline; cache sized as GPU memory; DeepSeek-V2-Lite has 64 experts (top-6) so request-level reuse is easier than 512 experts top-10. Useful only as cache-policy prior art. Key finding relevant to us: reuse skew exists inside a request but disappears across many requests, so a static layout/pin trained across requests loses (consistent with our session-pinned and per-sequence cache families).",
+  "quality_loss": "None (exact caching/prefetch).",
+  "ablation": "EAMC capacity sweep (Fig. 9, 1-120) and prefetch/cache micro-benchmarks (Sec. 5.2); no layout ablation.",
+  "limitations": "Authors: Mixtral (few large experts, high activation ratio) is the worst case (836 ms); long-context shrinks the GPU expert buffer; all KV in GPU memory; EAMC needs adaptation after workload shifts.",
+  "contradicts_our_findings": "No. Its premise (request-level reuse, global skew vanishes) matches our per-sequence and pinned-set results. Note Ollama 2590 ms is a poor llama.cpp number because 32 GB DRAM and CPU compute with PCIe-staged experts; do not compare to our CPU-only llama.cpp.",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0125",
+  "title": "MoE-SpeQ: Speculative Quantized Decoding with Proactive Expert Prefetching and Offloading for Mixture-of-Experts (v1, Wenfeng Wang, Jiacheng Liu, Xiaofeng Hou, Xinfeng Xia, Peng Tang, Mingxuan Zhang, Chao Li, Minyi Guo; SJTU/HKUST); renamed in v2/v3 Specter: Fast MoE Inference via Quantization-Enabled Multi-Step Speculative Offloading (ASPLOS 2027)",
+  "id_read": "arXiv:2511.14102 v1 (18 Nov 2025, 104k chars), v2 (20 Oct 2026) and v3 (22 Oct 2026, 117k chars), all read via pdftotext; abs page: 'Accepted to ASPLOS 2027'",
+  "raw_text_read": true,
+  "setup": "v1/v3: Phi-3.5-MoE (41.9B total/6.6B active, 8 experts, top-2, 78 GB FP16), Qwen1.5-MoE-A2.7B (14.3B/2.7B, 60 experts top-4 + 1 shared, 29 GB), DeepSeek-V2-Lite (15.7B/2.4B, 64 experts top-6, 34 GB). One A100 40 GB, 24-core Xeon Silver 4310, 256 GB RAM, PCIe 4.0 x16 (16 GB/s per direction). Draft = GPTQ INT4 copy of the target's own experts (sharing weights/KV); target FP16. Datasets C4, WikiText-2, HumanEval, GSM8K, GPQA. Batch 1 (v1 and main v3) plus B=1..32 in v3. Baselines v1: HF Transformers, Mixtral-Offloading SC/SM; v3 adds vLLM, llama.cpp, SpecMoEOff (primary). GPU budgets high/low 24/18 (DS), 20/16 (Qwen), 40/32 (Phi) GB. Software: HF Transformers + CUDA streams.",
+  "numbers": [
+   {
+    "what": "v1 abstract headline Phi-MoE",
+    "value": "at most 2.34x over state-of-the-art offloading framework",
+    "baseline": "unspecified",
+    "ratio": "2.34 (not derivable from text tables; figure only)",
+    "where": "v1 abstract, Sec.1 contributions"
+   },
+   {
+    "what": "v1 Fig.13 text, Phi-MoE high memory",
+    "value": "163.1 ms vs Mixtral-Offloading-SC 536.7, SM 351.8, Transformers 960.5",
+    "baseline": "MO-SC / MO-SM / HF",
+    "ratio": "3.29 / 2.16 / 5.89 (own calc)",
+    "where": "v1 Sec.4.2"
+   },
+   {
+    "what": "v1 Qwen2-MoE",
+    "value": "74.1 ms",
+    "baseline": "MO-SC 2.5x, Transformers 3.5x (as stated)",
+    "ratio": "-",
+    "where": "v1 Sec.4.2"
+   },
+   {
+    "what": "v3 abstract headline",
+    "value": "average 1.50x, up to 1.88x TPOT speedup over SpecMoEOff, single request",
+    "baseline": "SpecMoEOff",
+    "ratio": "1.88 = Qwen1.5-MoE high-mem 66.4/35.3 (own calc)",
+    "where": "v3 abstract, Sec.4.2.1"
+   },
+   {
+    "what": "v3 Phi-3.5 high-mem TPOT",
+    "value": "163.3 ms",
+    "baseline": "SpecMoEOff 292.1, MO-SM 295.1, vLLM 297.5, Transformers 960.6",
+    "ratio": "1.79 / 1.81 / 1.82 / 5.88 (own calc)",
+    "where": "v3 Sec.4.2.1"
+   },
+   {
+    "what": "v3 DeepSeekV2-Lite high-mem",
+    "value": "72.2 ms",
+    "baseline": "Transformers 344.9",
+    "ratio": "4.78",
+    "where": "v3 Sec.4.2.1"
+   },
+   {
+    "what": "v3 Table 3 batch 32 DeepSeekV2-Lite avg TPOT",
+    "value": "119.2 ms",
+    "baseline": "SpecMoEOff 718.0, MO-SM 1262.9, Transformers 1493.6",
+    "ratio": "6.02 / 10.6 / 12.5 (own calc)",
+    "where": "v3 Table 3"
+   },
+   {
+    "what": "v3 cache hit rate (DeepSeekV2-Lite)",
+    "value": "99.85 / 98.62 / 96.25% at 16/24/32 GB",
+    "baseline": "LRU 29.2 / 50.94 / 76.56%",
+    "ratio": "-",
+    "where": "v3 Fig.17, v1 Table 3"
+   },
+   {
+    "what": "v3 Table 5b ablation",
+    "value": "69.2 full; 83.5 w/o PIO; 94.4 w/o PIO+SIC; 130.4 w/o PIO+SIC+SEE ms/token",
+    "baseline": "full",
+    "ratio": "1.21 / 1.36 / 1.88 slowdown",
+    "where": "v3 Table 5b"
+   },
+   {
+    "what": "v3 Table 6 oracle prefetch error injection",
+    "value": "63.0 ms at 100% accurate; 84.2 ms at 41% accurate",
+    "baseline": "63.0",
+    "ratio": "1.34",
+    "where": "v3 Table 6"
+   },
+   {
+    "what": "v3 Table 5a H2D hidden",
+    "value": "55.5% / 60.5% / 22.4% (DS / Qwen / Phi)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "v3 Table 5a"
+   },
+   {
+    "what": "v1 Table 4 ablation DeepSeekV2-Lite",
+    "value": "13.02 full; 12.37 w/o async prefetch; 8.88 w/o fused kernel; 8.29 neither (units tok/s)",
+    "baseline": "full",
+    "ratio": "0.95 / 0.68 / 0.64",
+    "where": "v1 Table 4"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "up to 2.34x over best offloading framework on Phi-MoE",
+    "correct": "yes (v1 only)",
+    "true_value": "2.34x appears in v1 abstract and intro; it is absent from v2/v3 (full text grep; only a reference title matches). v3 headline is 1.50x average / 1.88x max over SpecMoEOff"
+   },
+   {
+    "claim": "Small draft predicts experts to prefetch",
+    "correct": "yes",
+    "true_value": "INT4 GPTQ draft with shared weights produces multi-step expert lookahead; recall 0.93-0.96 (v3 Table 6b)"
+   },
+   {
+    "claim": "(prefetch gain, not fewer bytes)",
+    "correct": "yes",
+    "true_value": "authors say draft overlaps PCIe with compute; verification of k tokens increases distinct experts per layer"
+   },
+   {
+    "claim": "title stale",
+    "correct": "yes",
+    "true_value": "paper renamed Specter in v2 (Oct 2026)"
+   },
+   {
+    "claim": "(first pass) v3 up to 6.02x at batch 32 on DeepSeekV2-Lite",
+    "correct": "yes",
+    "true_value": "vs SpecMoEOff; Table 3 718.0/119.2"
+   },
+   {
+    "claim": "(first pass) 'Xeon, 256 GB RAM'",
+    "correct": "yes",
+    "true_value": "Xeon Silver 4310, 256 GB"
+   },
+   {
+    "claim": "(first pass) 2.34x 'not found in the first 100k characters of v3'",
+    "correct": "yes",
+    "true_value": "confirmed absent in full v3 text; first pass's 39k unread chars are now read"
+   }
+  ],
+  "transfers": "no",
+  "why": "A100 GPU with PCIe from host DRAM; benefit is overlapping 16 GB/s PCIe transfers with draft compute; needs a GPU-resident quantized draft copy of the same model plus FP16 target; 8-64 experts; CPU-only, 8-32 GB RAM, NVMe streaming break all assumptions. Bytes read are not reduced, and our simulation (pubtech/C.md #21) shows verify-union bytes ratio >= 1 for K>=2.",
+  "quality_loss": "None claimed: target verification keeps output distribution exact (v3 Sec.5 says 'standard target verification preserves the output distribution'); draft acceptance >90% (v1 Sec.4.5).",
+  "ablation": "Yes: v1 Table 3 hit-rates for LRU/LRU(scaled)/single-prefetch/speculative; v3 Table 5b cumulative component removal (PIO, SIC, SEE), v1 Table 4 (async prefetch, fused kernel). It cleanly isolates prefetch from cache size (LRU-S at same slots).",
+  "limitations": "v3: Phi-3.5 hides only 22.4% of H2D; gains shrink when LRU-S has big cache (32 GB); batch growth increases expert working set (Fig.16); depends on high draft-target alignment. v1: cannot compare to vLLM/llama.cpp directly (built on Transformers); no small same-architecture MoE draft exists so draft ablation 'cannot be conducted'.",
+  "contradicts_our_findings": "No. Matches pubtech/C.md #21: draft-based gain is prefetch overlap, not fewer bytes. Table 6 shows oracle prefetch is only 1.34x better than 41%-accurate prefetch, i.e. on a GPU-PCIe system prediction quality has limited upside; in a disk-bound CPU system with prefetch window of one layer compute (~ms) vs read time the overlap budget is far smaller.",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0127",
+  "title": "Efficient Mixture-of-Experts LLM Inference with Apple Silicon NPUs (NPUMoE; Afsara Benazir, Felix Xiaozhu Lin; University of Virginia)",
+  "id_read": "arXiv:2604.18788v1 [cs.LG] 20 Apr 2026 (catalog says 22 Apr), PDF via pdftotext (150,525 chars)",
+  "raw_text_read": true,
+  "setup": "Models (Table 1): Phi-3.5-MoE-Instruct 42.6B total/6.6B active, 32 layers, 16 experts top-2 (83.75 GB, ~150 MB per expert); Phi-tiny-MoE 3.8B/1.1B (7.51 GB); Qwen3-30B-A3B 128 experts top-8, 48 layers (28.64 GB). Hardware: Apple M2 Max (64 GB, 12-core CPU) and M2 Ultra (192 GB, 24-core CPU, 32-core ANE); the text does not say which model ran on which chip (an 83.75 GB model cannot fit the 64 GB machine). Baselines all Core ML based: Core ML CPU-only, Core ML naive (default scheduling), ANEMLL (attention on NPU, experts on CPU). Workloads HellaSwag, BoolQ, RULER; long-context prefill dominated; average decode length 8 tokens. Chunked prefill, FP16 compute (INT8 dequantised), whole model resident in unified memory; energy with Zeus.",
+  "numbers": [
+   {
+    "what": "Prefill TTFT reduction overall",
+    "value": "1.32x-5.55x across baselines and settings",
+    "baseline": "Core ML CPU / naive / ANEMLL",
+    "ratio": "-",
+    "where": "Abstract, Sec.5.3, Fig.14"
+   },
+   {
+    "what": "Prompt 1024, chunk 256 / 512",
+    "value": "2.07x and 1.32x vs Core ML CPU; 5.55x and 3.44x vs naive; 1.95x and 1.33x vs ANEMLL",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.5.3"
+   },
+   {
+    "what": "Prompt 4096, chunk 512 / 1024",
+    "value": "1.58x/1.72x vs CPU, 3.85x/3.70x vs naive, 1.50x/1.56x vs ANEMLL",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.5.3"
+   },
+   {
+    "what": "Energy per token",
+    "value": "1.81x-7.37x better (CPU 1.81-3.19x, naive 4.71-7.37x, ANEMLL 1.86-3.43x)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.5.4 Fig.15"
+   },
+   {
+    "what": "End-to-end (prefill + ~8 decode tokens)",
+    "value": "up to 3.86x vs naive, 1.26x vs Core ML CPU, 1.19x vs ANEMLL",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.5.3"
+   },
+   {
+    "what": "Attention latency penalty",
+    "value": "+27.6% on NPU/CPU backend",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.5.3"
+   },
+   {
+    "what": "Ablation Fig.17",
+    "value": "Ours-all 2.89x faster than Ours-base (NPU one graph per expert, worst), 1.09x faster than Ours-TG; Ours-TG best energy (998.4), 3.74x less than Ours-base",
+    "baseline": "Ours-base",
+    "ratio": "2.89",
+    "where": "Sec.5.6"
+   },
+   {
+    "what": "Calibration overlap",
+    "value": "86% (top-4) / 94% (top-8) mean overlap on unseen inputs in prefill; PhiMoE 65.2% prefill / 77.0% decode across datasets",
+    "baseline": "random",
+    "ratio": "-",
+    "where": "Sec.5.6 Fig.18; Phi has only 16 experts so top-8 is half the pool"
+   },
+   {
+    "what": "Table 3 accuracy PhiMoE with token dropping",
+    "value": "token drop 10.63-21.77%, padded 31.7-37.5%; accuracy BoolQ 86.00 -> 86.00, Hellaswag 88.57 -> 87.62 (-1.07), RULER niah_single_2 95.5 -> 95.0, multikey 96 -> 96",
+    "baseline": "FP16",
+    "ratio": "-",
+    "where": "Table 3"
+   },
+   {
+    "what": "Padding",
+    "value": "35.35% of computed tokens zero-padded; 1.25-1.36x CPU cycles",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.5.6"
+   },
+   {
+    "what": "GPU comparison",
+    "value": "GPU 1.26x-5.4x faster than NPU but 1.87x-4.48x more energy, 5.65x-9.41x power",
+    "baseline": "NPUMoE",
+    "ratio": "-",
+    "where": "Sec.5.6 / App. A"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "NPU for MoE prefill on unified memory",
+    "correct": "yes",
+    "true_value": "Core ML graphs, static capacity tiers, grouped expert execution, load-aware compute residency"
+   },
+   {
+    "claim": "NPU prefill without its optimizations performs worst",
+    "correct": "yes",
+    "true_value": "Ours-base worst; 2.89x gap"
+   },
+   {
+    "claim": "86% (top-4) / 94% (top-8) expert-prediction overlap",
+    "correct": "yes",
+    "true_value": "but as offline-calibration overlap in prefill, and the model is not named in that sentence; Phi has 16 experts"
+   },
+   {
+    "claim": "(first pass) energy 1.81x-7.37x",
+    "correct": "yes",
+    "true_value": "-"
+   },
+   {
+    "claim": "(first pass) 2.07x vs Core ML CPU at prompt 1024 chunk 256",
+    "correct": "yes",
+    "true_value": "-"
+   },
+   {
+    "claim": "(first pass) 'whole model resident in RAM'",
+    "correct": "yes",
+    "true_value": "load and cache once at compile time; graph eviction only if unified memory overloaded; but 83.75 GB vs 64 GB machine unresolved"
+   },
+   {
+    "claim": "(first pass) arXiv date 22 Apr 2026",
+    "correct": "no",
+    "true_value": "paper stamp is 20 Apr 2026 (catalog's 22 Apr probably listing date)"
+   }
+  ],
+  "transfers": "no",
+  "why": "Everything is in unified memory so prefill is dispatch/compute-bound, opposite of NVMe-bound; the baselines are Core ML (not tuned llama.cpp); Apple ANE hardware; Phi has 16 experts. It drops tokens above static capacity (lossy, 10-22% of tokens). Only supports break-even logic: an accelerator helps prefill once I/O is hidden (prompt > ~600-1100 tokens in our arithmetic).",
+  "quality_loss": "Yes, small: capacity-limited token dropping, accuracy delta 0 to -1.07% on 4 tasks (Table 3), PhiMoE only.",
+  "ablation": "Yes (Fig.17, Table 4/5): padding, grouping group size G in {4,8}, expert capacity {32,64,128}; no storage component.",
+  "limitations": "Authors: optimisation targets long-context prefill-dominated workloads; decode follows the same pipeline, memory bound and does not amortise CPU-NPU coordination; GPU is faster; attention on NPU costs +27.6%.",
+  "contradicts_our_findings": "No direct contradiction. It supports our arithmetic that accelerator wins appear only when prefill is compute-bound. Note its prefill expert imbalance figure (Fig.5) shows skew in prefill; our 125B prefill coverage is still unmeasured.",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0128",
+  "title": "ProMoE: Fast MoE-based LLM Serving using Proactive Caching (Xiaoniu Song, Zihang Zhong, Rong Chen, Haibo Chen; SJTU IPADS / Zhejiang Univ.)",
+  "id_read": "arXiv:2410.22134v3 [cs.DC] 1 Sep 2025, PDF via pdftotext (128,974 chars)",
+  "raw_text_read": true,
+  "setup": "Models (Table 1): Deepseek-moe 16.4B/2.8B 28 layers 64 experts top-6 (FP16); Deepseek-v2-lite 15.7B/2.7B 64 top-6 (FP16); Qwen1.5-moe 14.3B/2.7B 60 top-4 (FP16); Qwen2-moe 57.4B/14.2B 64 top-8 (INT4); Mixtral-8x7B 46.7B/12.9B 8 top-2 (INT4). Hardware: RTX 4090 24 GB, i9-14900K, 128 GB DRAM, PCIe 4.0 32 GB/s; cache rate varied to emulate smaller GPUs. ShareGPT (and Alpaca). Batch 1 default, 1-4 tested. Codebases: HF transformers (TO baseline, improved) and llama.cpp (LO baseline layer offload, CPU computes offloaded layers); added baselines UM, static cache, LRU cache. Learned predictor with stride prefetching, chunked prefetch, early preemption, reordered inference.",
+  "numbers": [
+   {
+    "what": "Abstract average speedup vs existing offloading",
+    "value": "prefill 2.20x (up to 3.21x); decode 2.07x (up to 5.02x)",
+    "baseline": "TO/UM/LO in transformers and llama.cpp",
+    "ratio": "transformers 2.15/2.47 and llama.cpp 2.25/1.66 average to 2.20/2.07 (own calc, matches)",
+    "where": "Abstract, Sec.7.2"
+   },
+   {
+    "what": "vs hand-crafted caches (static, LRU) average",
+    "value": "prefill 1.78x (up to 2.48x); decode 1.34x (up to 1.79x)",
+    "baseline": "static/LRU",
+    "ratio": "-",
+    "where": "Sec.1"
+   },
+   {
+    "what": "transformers codebase vs static / LRU",
+    "value": "prefill 1.42x / 2.21x; decode 1.47x / 1.31x",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.7.2 Fig.10"
+   },
+   {
+    "what": "llama.cpp codebase vs static / LRU",
+    "value": "prefill 1.36x (1.75) / 2.12x (2.22); decode 1.49x (1.79) / 1.09x (1.17)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.7.2 Fig.11"
+   },
+   {
+    "what": "llama.cpp vs UM/LO etc.",
+    "value": "prefill 2.25x (up to 3.21x); decode 1.66x (up to 2.07x)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.7.2"
+   },
+   {
+    "what": "Ablation decode",
+    "value": "prefetch + chunked + early preempt + reordered: 1.35x over LRU base (transformers)",
+    "baseline": "LRU base",
+    "ratio": "1.35",
+    "where": "Fig.12 text"
+   },
+   {
+    "what": "Ablation prefill transformers",
+    "value": "early preemption 1.27x, reordered inference 2.39x vs base; plain prefetching 'minimal improvement'",
+    "baseline": "base",
+    "ratio": "-",
+    "where": "Sec.7.3"
+   },
+   {
+    "what": "Cache-rate sweep llama.cpp QW-2",
+    "value": "vs LRU 1.53x prefill / 1.14x decode; vs static 1.10x / 1.27x; LO wins decode at low cache rate",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.7.4 Fig.16"
+   },
+   {
+    "what": "Batch size, llama.cpp QW-2",
+    "value": "ProMoE over LRU decode 1.16x at bs1, 1.34x at larger bs",
+    "baseline": "LRU",
+    "ratio": "-",
+    "where": "Sec.7.5"
+   },
+   {
+    "what": "Critical-path loading time",
+    "value": "69.68% -> 30.96% (QW-2 prefill); decode 25.61%/29.20% vs LRU 45.52%/50.89%",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.7.4"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "2.20x average prefill speedup (up to 3.21x)",
+    "correct": "yes",
+    "true_value": "vs offloading baselines; vs static/LRU caches it is 1.78x"
+   },
+   {
+    "claim": "over offloading baselines (GPU, PCIe)",
+    "correct": "yes",
+    "true_value": "RTX 4090 over PCIe from DRAM"
+   },
+   {
+    "claim": "(first pass) 2.07x decode",
+    "correct": "yes",
+    "true_value": "up to 5.02x"
+   },
+   {
+    "claim": "(first pass) 1.78x / 1.34x vs caches",
+    "correct": "yes",
+    "true_value": "up to 2.48x / 1.79x"
+   },
+   {
+    "claim": "(first pass) 'llama.cpp CPU offload wins for Mixtral decode'",
+    "correct": "yes",
+    "true_value": "authors: LO surpasses ProMoE in decode for Mixtral because 25% of experts are active; also LO wins at low cache rates"
+   }
+  ],
+  "transfers": "no",
+  "why": "Weights live in host DRAM and stream to a 24 GB GPU; our experts live on NVMe and are computed on CPU; predictor (learned from intermediate hidden states, stride prefetch) needs per-layer lookahead and compute to overlap, but at 512-expert top-10 the same prediction accuracy would have to be much higher; llama.cpp codebase gain over LRU decode is only 1.09x. 64-expert models.",
+  "quality_loss": "None claimed (prefetching only; lossless).",
+  "ablation": "Yes (Fig.12/13): prefetch, chunking, early preemption, reordered inference; shows prefill benefit comes from early preemption and expert reorder, not prefetch, because almost all experts are touched.",
+  "limitations": "Authors: reduced benefit in llama.cpp (less Python overhead); LO better for Mixtral and low cache rate decode; evaluated at batch size 1-4; models up to 57B INT4.",
+  "contradicts_our_findings": "No. Its prefill claim 'nearly all experts accessed' is for 64-expert models with long prompts; our decode-trace coverage of 55-66% after 200 tokens (pubtech/C.md #2-0) is a different quantity. ProMoE's own LRU thrashing observation in prefill (IDs in order) is an argument for expert-major ordering already in our idea.",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0129",
+  "title": "DuoServe-MoE: Dual-Phase Expert Prefetch and Caching for LLM Inference QoS Assurance (Yuning Zhang, Grant Pinkert, Nan Yang, Yanli Li, Dong Yuan; University of Sydney)",
+  "id_read": "arXiv:2509.07379 v2 (9 Apr 2026, 100,866 chars) read in full for results; v1 (71,894 chars) read for the headline numbers",
+  "raw_text_read": true,
+  "setup": "Models: Mixtral-8x7B and 8x22B (4-bit AWQ, 8 experts top-2), Qwen3-30B-A3B (FP8, 128 experts top-8), DeepSeekMoE-16B (66 experts per paper text, 8 activated, full weights). Hardware: (1) AMD Threadripper PRO 3945WX 12-core, 128 GB RAM, RTX A5000 24 GB, Ubuntu 20.04; (2) Threadripper PRO 5955WX 16-core, 128 GB, RTX A6000 48 GB; PCIe 4.0. Datasets SQuAD and Orca-Math. Baselines: On-Demand Fetch (HF Accelerate), Layer-wise Full Prefetch (MoESys style), MoE-Infinity (MIF; OOM on 22B). Built on vLLM, CUDA two-stream prefill pipeline, MLP layer predictor trained on traces for decode (0.6 ms, ~300 MB GPU, 2.5% of dataset, collection+training <= 9 h).",
+  "numbers": [
+   {
+    "what": "v2 headline",
+    "value": "TTFT 1.78x-5.34x, end-to-end 1.42x-7.55x",
+    "baseline": "ODF and LFP (and MIF where available)",
+    "ratio": "-",
+    "where": "v2 abstract and Sec.VI-B"
+   },
+   {
+    "what": "v1 headline",
+    "value": "TTFT 1.78x-3.8x, end-to-end 1.42x-7.54x",
+    "baseline": "same",
+    "ratio": "-",
+    "where": "v1 Sec.1 and Sec.VI; the TTFT upper bound changed between versions"
+   },
+   {
+    "what": "v2 dataset averages",
+    "value": "end-to-end 1.72x over ODF on Orca, 1.67x on SQuAD; on 30B TTFT over ODF about 1.95-1.99x",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Sec.VI-B"
+   },
+   {
+    "what": "Table III predictor accuracy, Top-k (all routed experts right)",
+    "value": "DuoServe 54.16-66.85%; MIF 36.13-44.33%",
+    "baseline": "MIF",
+    "ratio": "~1.4-1.6x",
+    "where": "Table III"
+   },
+   {
+    "what": "Table III 'at least half' routed experts right",
+    "value": "DuoServe 90.31-99.1%; MIF 76.83-84.22%",
+    "baseline": "MIF",
+    "ratio": "-",
+    "where": "Table III"
+   },
+   {
+    "what": "Table II peak GPU memory (LFP/ODF/MIF/DuoServe/GPU-only)",
+    "value": "Mixtral-8x7B 4.24/3.63/15.24/3.91/25.14 GB; Qwen3-30B 1.80/1.24/7.67/1.54/30.0 GB; DeepSeekMoE-16B 2.95/1.98/11.35/2.28/32.8 GB",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Table II"
+   },
+   {
+    "what": "Batch size",
+    "value": "throughput gain shrinks as batch grows (union of experts densifies)",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "Fig.7 text"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "Two-stream pipeline overlapping expert prefetch with compute during prefill",
+    "correct": "yes",
+    "true_value": "prefill computes one expert while prefetching another; all experts of each layer are fetched"
+   },
+   {
+    "claim": "Prefill activates experts densely, decode sparsely",
+    "correct": "partly",
+    "true_value": "the paper asserts it; the supporting text example is Mixtral (8 experts, top-2) 'can activate all experts in a layer during prefill'; I found no measured coverage for the 128-expert Qwen3 or DeepSeekMoE in the text"
+   },
+   {
+    "claim": "(first pass) TTFT 1.78x-3.8x, E2E 1.42-7.54x",
+    "correct": "yes (v1)",
+    "true_value": "current v2 says TTFT 1.78-5.34x, E2E 1.42-7.55x"
+   },
+   {
+    "claim": "(first pass) predictor top-2 hit 54-67% (Table 3)",
+    "correct": "partly",
+    "true_value": "it is Table III 'Top-k = all routed experts correct' (for Qwen3/DeepSeek that is top-8, 55-61%), table numbering III; range 54.16-66.85% correct"
+   },
+   {
+    "claim": "(first pass) A5000 / A6000",
+    "correct": "yes",
+    "true_value": "plus 128 GB RAM, PCIe 4.0"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU with PCIe from host RAM; Mixtral top-2 of 8 makes 'dense prefill' trivially true; for decode, the predictor needs per-layer GPU inference and trace training (<=9 h) and only prefetches, so CPU-only NVMe streaming loses the GPU compute overlap; no disk.",
+  "quality_loss": "None claimed (prefetch/cache only, quantization is AWQ/FP8 from the model setup).",
+  "ablation": "Limited: compares to ODF, LFP, MIF; no phase-by-phase ablation of prefill vs decode components found in text; predictor accuracy compared in Table III.",
+  "limitations": "Authors: models with larger expert pools and sparser routing are harder to learn; throughput gain shrinks at large batch; MIF OOMs on 22B; predictor training needs offline traces.",
+  "contradicts_our_findings": "No, but it does not support 'prefill touches nearly every expert' for 128+ expert models; our decode-trace coverage 55-66% after 200 tokens (proxy) leaves that open. Absolute baseline latencies are in figures (not text-extractable).",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0130",
+  "title": "ssd-llm (github quantumnic/ssd-llm; Rust; 'Run 70B+ LLMs on Apple Silicon by using SSD as extended memory'; MIT license; 58 stars; created 2026-02-17, last push 2026-10-24)",
+  "id_read": "README.md raw, BENCHMARKS.md raw, CHANGELOG.md raw, src/inference/transformer.rs and moe.rs raw, repo tree and API JSON (no paper)",
+  "raw_text_read": true,
+  "setup": "Dense GGUF models (LLaMA 7B/13B/70B Q4_0 targets) with mmap + madvise, LRU layer cache, prefetcher, Metal GPU kernels; MoE support v1.10 (Mixtral-style, top-K gating, on-demand loading). BENCHMARKS.md: MacBook Apple M4 base, 16 GB, macOS 26.6, ssd-llm v1.39.0 vs llama.cpp b10180 (Metal), one model only: Qwen2-0.5B-Instruct Q4_0 (330 MB, 24 layers) that fits in RAM.",
+  "numbers": [
+   {
+    "what": "llama.cpp pp512 / tg128 (Qwen2-0.5B, M4)",
+    "value": "2628 t/s / 156.6 t/s",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "BENCHMARKS.md"
+   },
+   {
+    "what": "ssd-llm estimated prefill / decode (same model)",
+    "value": "~222 t/s / ~9.2 t/s ('Est.')",
+    "baseline": "llama.cpp",
+    "ratio": "0.084 / 0.059 (own calc)",
+    "where": "BENCHMARKS.md"
+   },
+   {
+    "what": "ssd-llm cold layer load / sequential prefetch stream",
+    "value": "4274 MB/s / 3058 MB/s",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "BENCHMARKS.md"
+   },
+   {
+    "what": "README benchmark table 70B Q4 8 GB budget",
+    "value": "~8 ms/layer layer load, Est. tok/s 'TBD'",
+    "baseline": "-",
+    "ratio": "-",
+    "where": "README 'Benchmarks' (header says v0.5)"
+   },
+   {
+    "what": "Layer-major batch prefill",
+    "value": "implemented: transformer::batch_prefill / batch_prefill_lora; CHANGELOG v0.6.0 2026-02-18 'loads each transformer layer once, processes ALL prompt tokens through it'",
+    "baseline": "per-token layer loads",
+    "ratio": "no measurement",
+    "where": "CHANGELOG, transformer.rs lines 124-175, 672-706"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "Layer-major batch prefill, each layer's weights loaded once for all prompt tokens",
+    "correct": "yes (dense)",
+    "true_value": "implemented in code for dense layers; no prefill benchmark exists"
+   },
+   {
+    "claim": "(first pass) no measured tok/s ('TBD')",
+    "correct": "partly",
+    "true_value": "README table TBD; BENCHMARKS.md has a tiny-model fits-in-RAM run where ssd-llm estimates ~222 t/s prefill vs llama.cpp 2628 t/s"
+   },
+   {
+    "claim": "(first pass) 'unclear if implemented'",
+    "correct": "no",
+    "true_value": "implemented (CHANGELOG v0.6.0 + code); MoE: moe.rs contains batch_expert_selection (union of experts for a batch) but transformer.rs does not call it in the files I read, so MoE prefill is per-token experts inside the layer-major loop (from grep of the two files; not run)"
+   },
+   {
+    "claim": "(first pass) 58 stars",
+    "correct": "yes",
+    "true_value": "58 on 2026-10-29"
+   }
+  ],
+  "transfers": "no",
+  "why": "No MoE-at-scale evidence at all; layer-major prefill for dense models is a standard idea (llama.cpp ubatch already loops tokens per layer, from memory). For MoE the useful variant is expert-major, which the repo's MoE code does not implement.",
+  "quality_loss": "none stated",
+  "ablation": "none",
+  "limitations": "None stated in README beyond the TBD; numbers are 'Est.'.",
+  "contradicts_our_findings": "No. Provides no evidence for or against our I/O-bound prefill arithmetic.",
+  "unread_reason": ""
+ }
+]

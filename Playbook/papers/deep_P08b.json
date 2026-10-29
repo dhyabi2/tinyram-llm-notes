@@ -1,0 +1,512 @@
+[
+ {
+  "method_row_id": "P-0177",
+  "title": "Fast Inference of Mixture-of-Experts Language Models with Offloading (Eliseev, Mazur)",
+  "id_read": "arXiv 2312.17238v1 + repo README",
+  "raw_text_read": true,
+  "setup": "Mixtral-8x7B (46.7B, 8 experts, top-2); HQQ 4-bit attn, 2/3-bit experts (2-bit ~2.6 bpw); T4 Colab, RTX 3080 Mobile, RTX 3060, A100 reference; LRU k=2 (3060) or 4; batch 1; experts in host RAM over PCIe",
+  "numbers": [
+   {
+    "what": "2-bit full algorithm tok/s A100/3080M/3060/T4",
+    "value": "3.061/2.655/2.278/2.092",
+    "baseline": "naive offloading 1.392/1.059/0.919/0.661",
+    "ratio": "2.20/2.51/2.48/3.16",
+    "where": "Table 2 p.7"
+   },
+   {
+    "what": "full vs no LRU/no preload",
+    "value": "same",
+    "baseline": "2.265/1.758/1.547/1.168",
+    "ratio": "1.35/1.51/1.47/1.79",
+    "where": "Table 2"
+   },
+   {
+    "what": "LRU alone (no preload vs none)",
+    "value": "2.918/2.227/2.051/1.567",
+    "baseline": "2.265/1.758/1.547/1.168",
+    "ratio": "1.29/1.27/1.33/1.34",
+    "where": "Table 2"
+   },
+   {
+    "what": "MMLU 4-bit attn + 2-bit experts (17.54 GB)",
+    "value": "65.58",
+    "baseline": "FP16 70.51 / 4-bit experts 69.11",
+    "ratio": "-4.93 / -3.53 points",
+    "where": "Table 1 p.6"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "about 2.6 bpw",
+    "correct": "yes",
+    "true_value": "2.6 bits avg"
+   },
+   {
+    "claim": "2 to 3 tok/s",
+    "correct": "yes",
+    "true_value": "2.09-3.06 (2-bit), 1.6-2.85 (3-bit)"
+   },
+   {
+    "claim": "first-pass: 66.66 = 4-bit attn + 2-bit experts",
+    "correct": "no",
+    "true_value": "66.66 = FP16 attn + 2-bit experts (19.33 GB); 4-bit attn + 2-bit = 65.58 (17.54 GB)"
+   },
+   {
+    "claim": "first-pass: 70.3 = 4/4-bit",
+    "correct": "no",
+    "true_value": "70.3 = FP16 attn + 4-bit experts; 4/4 = 69.11"
+   }
+  ],
+  "transfers": "partly",
+  "why": "GPU, PCIe host RAM, 8 big experts, cache is 25-50% of experts; byte lever (2.6 bpw) same as ours, LRU gain not transferable at 2-8 footprint caches over 512 experts",
+  "quality_loss": "MMLU -4.93 points (65.58 vs 70.51), Wiki2 ppl 3.59->4.61",
+  "ablation": "Yes: LRU, preload, naive (Table 2)",
+  "limitations": "Speculative prediction future work; PCIe-bound 2-4 tok/s",
+  "contradicts_our_findings": "No",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0178",
+  "title": "VPTQ: Extreme Low-bit Vector Post-Training Quantization for LLMs (Liu et al., EMNLP 2024)",
+  "id_read": "arXiv 2409.17066v2 + PyPI JSON 0.0.5.post1",
+  "raw_text_read": true,
+  "setup": "LLaMA-2 7/13/70B, LLaMA-3, Mistral-7B dense; quantised on 4xA100, fine-tune 8xH100; tok/s on GPU not named, naive torch/Triton kernels, 256 generated tokens",
+  "numbers": [
+   {
+    "what": "7B 2.02 bit W2 ppl / AvgQA / tok/s",
+    "value": "6.13/58.2/39.9",
+    "baseline": "FP16 5.12/62.2/38.32",
+    "ratio": "ppl +1.01, QA -4.0, speed 1.04x",
+    "where": "Table 2a"
+   },
+   {
+    "what": "70B 2.07 bit",
+    "value": "3.93/68.6/9.7 tok/s",
+    "baseline": "FP16 3.12/70.2; AQLM 6.9 tok/s; QuIP# 1.9",
+    "ratio": "1.41x vs AQLM",
+    "where": "Table 2c"
+   },
+   {
+    "what": "13B v=4,k=256 (2.01 bit) no fine-tune W2/C4",
+    "value": "7.21/9.78",
+    "baseline": "FP16 4.57/6.05; v=6,k=4096 6.29/8.29",
+    "ratio": "+2.64 ppl",
+    "where": "Table 10 row 3"
+   },
+   {
+    "what": "v=4,k=256 tok/s",
+    "value": "17.06",
+    "baseline": "FP16 30.03; v=6,k=4096 32.09",
+    "ratio": "0.57x of FP16",
+    "where": "Table 11"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "llama.cpp port only roadmap",
+    "correct": "yes",
+    "true_value": "unchecked item in PyPI Road Map"
+   },
+   {
+    "claim": "first-pass: PyPI page failed to load",
+    "correct": "no",
+    "true_value": "loads via pypi.org/pypi/vptq/json"
+   },
+   {
+    "claim": "first-pass 7B 36-40 tok/s, 70B 9.7",
+    "correct": "yes",
+    "true_value": "39.9/35.7, 9.7"
+   },
+   {
+    "claim": "first-pass: 70B at ~2 bits on RTX 4090",
+    "correct": "absent",
+    "true_value": "README-only, not in paper"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU kernels, dense models, Hessian weighting plus fine-tuning, about 2 bit not 1 bit; no MoE",
+  "quality_loss": "7B 2 bit: ppl +1.0, AvgQA -4.0; 70B -1.6 QA",
+  "ablation": "Yes: vector length / codebook size / RVQ / outliers / fine-tune (Tables 10-11); closest cell v=4,k=256",
+  "limitations": "Could not fine-tune 70B long; English only",
+  "contradicts_our_findings": "No; supports refutation of 1.3 bpw: even Hessian-weighted v=4,k=256 at 2 bit is ppl 7.21 vs 4.57",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0179",
+  "title": "GPTVQ: The Blessing of Dimensionality for LLM Quantization (van Baalen et al., Qualcomm)",
+  "id_read": "arXiv 2402.15319v1 and v2 (v2 re-framed for mobile CPU)",
+  "raw_text_read": true,
+  "setup": "Llama-1/2/3, Mistral-7B, Mixtral-8x7B; WikiText2 calib; v2 Table 1 Snapdragon X Elite, Llama-3-8B, own C engine, batch 1; baselines llama.cpp Q4_0, own INT4 g128",
+  "numbers": [
+   {
+    "what": "2D VQ 3.125 bpv tok/s",
+    "value": "26.15",
+    "baseline": "own INT4 g128 23.81; llama.cpp Q4_0 17.95",
+    "ratio": "1.098x; 1.457x",
+    "where": "v2 Table 1"
+   },
+   {
+    "what": "footprint GB",
+    "value": "3.52",
+    "baseline": "4.33 / 4.64",
+    "ratio": "0.813 / 0.759",
+    "where": "v2 Table 1"
+   },
+   {
+    "what": "Mixtral 2.125 bpv W2 ppl 2D / 4D",
+    "value": "5.92 / 5.28",
+    "baseline": "FP16 3.84; GPTQ 14.1",
+    "ratio": "+2.08 / +1.44",
+    "where": "v2 Table 2"
+   },
+   {
+    "what": "v1 data-transfer relative latency",
+    "value": "0.87-0.98",
+    "baseline": "INT4 1.00",
+    "ratio": "0.87-0.98",
+    "where": "v1 Table 3"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "better size/accuracy than scalar, Llama-2 and Mistral, 2-3 bits",
+    "correct": "yes",
+    "true_value": "also Mixtral and Llama-3"
+   },
+   {
+    "claim": "first-pass: tables unseen",
+    "correct": "no",
+    "true_value": "now seen"
+   },
+   {
+    "claim": "first-pass: VQ better latency than INT4 on mobile CPU",
+    "correct": "yes",
+    "true_value": "+10% tok/s, -19% footprint vs own INT4"
+   }
+  ],
+  "transfers": "partly",
+  "why": "Only CPU LUT evidence, but 3.1 bpv, indices <=6 bit, DRAM-bound mobile SoC, Hessian calibration; not NVMe-bound, not 1 bpw",
+  "quality_loss": "Mixtral 2.125 bpv zero-shot 75.9 -> 64.4 (2D) / 68.7 (4D); 3.125 bpv 75.1",
+  "ablation": "v1 Tables 6-11 (EM init, codebook fine-tune, scaling)",
+  "limitations": "Small codebooks/low dimension chosen for CPU may cost perplexity vs 8D AQLM",
+  "contradicts_our_findings": "No; its design rule (index<=6 bit, dim<=4) is opposite of 8-dim 256 words",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0180",
+  "title": "Mixture Compressor for MoE LLMs Gains More (Huang et al., ICLR 2025)",
+  "id_read": "arXiv 2410.06270v2",
+  "raw_text_read": true,
+  "setup": "Mixtral-8x7B and 8x22B; compress on 2-4 A100; test A100, RTX 3090; HQQ-based CUDA kernel; baselines GPTQ uniform, BSP, Hessian",
+  "numbers": [
+   {
+    "what": "2.54-bit PMQ avg acc",
+    "value": "67.50",
+    "baseline": "FP16 71.29; uniform 2-bit 42.67",
+    "ratio": "-3.8 points",
+    "where": "Table 2"
+   },
+   {
+    "what": "size",
+    "value": "16.24 GB",
+    "baseline": "96.80 GB",
+    "ratio": "5.96x",
+    "where": "Table 4"
+   },
+   {
+    "what": "2.05-bit +ODP speedup / acc",
+    "value": "1.80x / 62.68",
+    "baseline": "PMQ only 1.67x / 63.25",
+    "ratio": "",
+    "where": "Table 4"
+   },
+   {
+    "what": "MMLU 5-shot 2.54",
+    "value": "61.19",
+    "baseline": "70.60",
+    "ratio": "-9.4 points",
+    "where": "Table 3"
+   },
+   {
+    "what": "GSM8K / HumanEval 2.54",
+    "value": "37.67 / 29.34",
+    "baseline": "58.30 / 59.15",
+    "ratio": "0.65 / 0.50",
+    "where": "Table 9"
+   },
+   {
+    "what": "tok/s 1xA100 2.54 bit",
+    "value": "38",
+    "baseline": "2xA100 FP16 23",
+    "ratio": "1.65x",
+    "where": "Table 14"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "static expert quantisation plus dynamic pruning below 3 bits",
+    "correct": "yes",
+    "true_value": "PMQ + ODP"
+   },
+   {
+    "claim": "first-pass 1.80x with 2.05-bit 63.25",
+    "correct": "partly",
+    "true_value": "1.80x is with ODP (62.68); 63.25 alone 1.67x"
+   },
+   {
+    "claim": "first-pass GSM8K/HumanEval",
+    "correct": "yes",
+    "true_value": "PMQ 2.54-bit"
+   }
+  ],
+  "transfers": "partly",
+  "why": "8 experts, GPU resident, speedup largely from fitting 1 GPU vs 2; large quality loss at 2.05 bit; allocation by activation frequency x routing score x reconstruction error is useful",
+  "quality_loss": "2.54 bit -3.8 avg, GSM8K -20.6, HumanEval -29.8, MMLU5 -9.4; 2.05 bit -8.0 avg",
+  "ablation": "Yes: allocation metrics (Fig 5-6), tokens protection, thresholds",
+  "limitations": "Future work multimodal/hardware",
+  "contradicts_our_findings": "No; quality now measured and unfavourable at 2-bit",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0182",
+  "title": "D2MoE: Dual Routing and Dynamic Scheduling for Efficient On-Device MoE-based LLM Serving (Wang et al., MobiCom 2025)",
+  "id_read": "arXiv 2504.15299v1",
+  "raw_text_read": true,
+  "setup": "LLaMA-MoE-3.5B and Mixtral-8x7B (8 experts, top-2); RTX 3060 6GB + i7-11800H + 32GB + 970 EVO 3.5 GB/s; Jetson AGX Orin 64GB; 128 in/128 out, 4-32 requests, GPU memory budget 200-1600 MB; V1 INT2->4, V2 INT5->8; router fine-tune 2-4h",
+  "numbers": [
+   {
+    "what": "throughput Mixtral vs EdgeMoE",
+    "value": "1.14-1.39x",
+    "baseline": "EdgeMoE",
+    "ratio": "1.14-1.39",
+    "where": "Sec 5.2, Fig 10"
+   },
+   {
+    "what": "vs MoQE-DynaIO",
+    "value": "1.42-3.37x",
+    "baseline": "MoQE-DynaIO",
+    "ratio": "",
+    "where": "Sec 5.2"
+   },
+   {
+    "what": "Mixtral ppl V1 (INT2->4) / V2",
+    "value": "4.28 / 4.09",
+    "baseline": "INT8 4.04",
+    "ratio": "+5.9% / +1.2%",
+    "where": "Table 3 p.11"
+   },
+   {
+    "what": "Mixtral zero-shot avg V1",
+    "value": "79.86",
+    "baseline": "INT8 81.23",
+    "ratio": "-1.37 points (computed)",
+    "where": "Table 3"
+   },
+   {
+    "what": "LLaMA-MoE ppl V1 / V2",
+    "value": "15.68 / 14.58",
+    "baseline": "14.55",
+    "ratio": "+7.8% / +0.2%",
+    "where": "Table 3"
+   },
+   {
+    "what": "dequant overhead V1 Mixtral latency",
+    "value": "18.56% (4 req) -> 5.3% (32 req)",
+    "baseline": "",
+    "ratio": "",
+    "where": "Sec 5.3"
+   },
+   {
+    "what": "ablation +MWQ / +HEBF / +Budget",
+    "value": "1.91-4.95x / 1.11-1.21x / 1.06-1.21x",
+    "baseline": "",
+    "ratio": "",
+    "where": "Fig 14"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "low-bit base plus residual steps, token-adaptive bit-width",
+    "correct": "yes",
+    "true_value": "INT2->4 and INT5->8 nested"
+   },
+   {
+    "claim": "first-pass PPL 4.09 vs 4.04, 14.58 vs 14.55",
+    "correct": "partly",
+    "true_value": "those are V2 (INT5->8); V1 INT2->4 is 4.28 and 15.68"
+   },
+   {
+    "claim": "first-pass dequant 5-20%, router 1-2%",
+    "correct": "yes",
+    "true_value": "5.3-20.8%; 1.04-1.67% latency"
+   }
+  ],
+  "transfers": "partly",
+  "why": "SSD+RAM but GPU needed; nested benefit grows with concurrency 4-32; trained bit-width router; no preloading; 8 experts",
+  "quality_loss": "V1 INT2->4 Mixtral +0.24 ppl, -1.37 zero-shot; LLaMA-MoE +1.13 ppl",
+  "ablation": "Yes Fig 14 (router, MWQ, HEBF, budget)",
+  "limitations": "No async multi-request, no expert preloading, not for NPUs",
+  "contradicts_our_findings": "No; trained V1 quality is the only published figure for the layout that D.md could not measure",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0183",
+  "title": "MatGPTQ (Kleinegger, Crncevic, Alistarh) at the catalog URL; Matryoshka Quantization (Nair et al., Google DeepMind) is the named method",
+  "id_read": "arXiv 2602.03537v2 and arXiv 2502.06786v3",
+  "raw_text_read": true,
+  "setup": "MatGPTQ: Llama3.1-8B-Instruct, Qwen3-8B dense, RTX A6000, R={3,4,8}; MatQuant: Gemma-2 2B/9B, Mistral-7B, OmniQuant and QAT, TPUv5e",
+  "numbers": [
+   {
+    "what": "MatQuant int2 task avg (OmniQuant) Gemma2-2B/9B/Mistral",
+    "value": "52.37/63.35/62.75",
+    "baseline": "int2 baseline 51.33/60.24/59.74; bf16 68.21/74.38/73.99",
+    "ratio": "+1.0/+3.1/+3.0",
+    "where": "Table 1"
+   },
+   {
+    "what": "MatQuant int2 QAT",
+    "value": "52.20/62.29/61.97",
+    "baseline": "baseline 47.74/56.02/54.95",
+    "ratio": "+4.5/+6.3/+7.0",
+    "where": "Table 2"
+   },
+   {
+    "what": "sliced int4 from int8, no co-training",
+    "value": "39.78/38.11/37.29",
+    "baseline": "bf16 68.21/74.38/73.99",
+    "ratio": "collapse",
+    "where": "Table 1"
+   },
+   {
+    "what": "MatGPTQ 3-bit Llama avg",
+    "value": "68.83",
+    "baseline": "BF16 76.96; GPTQ 69.02; sliced 51.16; MatQuant 49.65",
+    "ratio": "-8.1",
+    "where": "Table 2"
+   },
+   {
+    "what": "MatGPTQ kernels / E2E",
+    "value": "2-6.5x / 2.8-3.9x HF, 1.7-3.5x vLLM",
+    "baseline": "FP16 cuBLAS",
+    "ratio": "",
+    "where": "Fig 1-3"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "nested int2-in-int4-in-int8 slicing",
+    "correct": "partly",
+    "true_value": "MatQuant yes; MatGPTQ trains 3/4/8 only, no 2-bit accuracy"
+   },
+   {
+    "claim": "first-pass: no int2 accuracy",
+    "correct": "yes",
+    "true_value": "2-bit only in kernels"
+   },
+   {
+    "claim": "first-pass MatQuant up to 4%/7%",
+    "correct": "yes",
+    "true_value": "verified abstract and Table 1-2"
+   }
+  ],
+  "transfers": "no",
+  "why": "dense models, GPU/TPU, training or calibration; speedups vs BF16",
+  "quality_loss": "int2 MatQuant still 11-16 points below bf16; MatGPTQ 3-bit -8 points",
+  "ablation": "Loss weighting (MatQuant Tables 4-5), lambda (MatGPTQ Tables 6-7); none on caching",
+  "limitations": "Native hardware int8/int4 only; MatGPTQ kernels lose to Marlin from batch 16",
+  "contradicts_our_findings": "No; supports post-hoc nesting being poor",
+  "unread_reason": null
+ },
+ {
+  "method_row_id": "P-0184",
+  "title": "GEMQ (Deng et al., ICML 2026) at the catalog URL; DynaExq (Chu et al.) is a separate paper",
+  "id_read": "arXiv 2605.23078v1 and arXiv 2511.15015v4",
+  "raw_text_read": true,
+  "setup": "GEMQ: DeepSeek-V2-Lite, Qwen1.5-MoE, Mixtral-8x7B, H100-80GB, batch 1, HQQ + Triton, baseline PMQ. DynaExq: Qwen3-30B (128 experts), Qwen3-80B (512 experts, Int4), Phi-3.5-MoE, RTX A6000 48GB, batch 1-32, baseline ExpertFlow and static Int4/Int2",
+  "numbers": [
+   {
+    "what": "GEMQ Mixtral size",
+    "value": "16.3 GB (decode mem 17.8)",
+    "baseline": "FP 87.0 GB",
+    "ratio": "5.34x",
+    "where": "Table 14"
+   },
+   {
+    "what": "GEMQ MMLU 5-shot 2.5 bit",
+    "value": "63.21",
+    "baseline": "FP 70.37; PMQ 60.70; uniform 50.51",
+    "ratio": "-7.16 points",
+    "where": "Table 10"
+   },
+   {
+    "what": "GEMQ 0-shot avg 2.5 bit",
+    "value": "65.13",
+    "baseline": "FP 70.97; PMQ 64.34; uniform 65.49",
+    "ratio": "-5.84",
+    "where": "Table 9"
+   },
+   {
+    "what": "GEMQ decode tok/s",
+    "value": "82.5",
+    "baseline": "PMQ 83.3",
+    "ratio": "0.99x",
+    "where": "Table 14"
+   },
+   {
+    "what": "DynaExq Qwen3-80B avg",
+    "value": "77.57",
+    "baseline": "Int2 73.09; Int4 78.11",
+    "ratio": "+4.48 / -0.54",
+    "where": "Table 4"
+   },
+   {
+    "what": "DynaExq throughput",
+    "value": "up to 2.73x",
+    "baseline": "ExpertFlow offloading, batch up to 32",
+    "ratio": "1.42-2.73x",
+    "where": "Fig 9 (plots only)"
+   },
+   {
+    "what": "decode expert activation ratio batch 1",
+    "value": "Qwen3-Next-80B 1.9%",
+    "baseline": "batch 32 39.2%",
+    "ratio": "",
+    "where": "Table 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "hotness-driven per-expert allocation (DynaExq and GEMQ)",
+    "correct": "partly",
+    "true_value": "DynaExq hotness-driven; GEMQ static gradient-based"
+   },
+   {
+    "claim": "GEMQ 2.5-bit Mixtral 87 GB -> 16 GB",
+    "correct": "yes",
+    "true_value": "87.0 -> 16.3 GB"
+   },
+   {
+    "claim": "7% MMLU drop",
+    "correct": "yes",
+    "true_value": "70.37 -> 63.21 (5-shot)"
+   },
+   {
+    "claim": "first-pass: ~18 GB and no MMLU",
+    "correct": "no",
+    "true_value": "18 GB is decode memory; MMLU is in the intro and Table 10"
+   },
+   {
+    "claim": "first-pass 6.1x/1.6x DeepSeek-V2-Lite",
+    "correct": "partly",
+    "true_value": "those are at 1.5 bit; 2.5 bit is 4.4x/1.44x"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU HBM-resident, H100/A6000, batch up to 32, coarse experts; DynaExq tiers precision inside HBM, not NVMe streaming",
+  "quality_loss": "GEMQ -7.2 MMLU points at 2.5 bit; DynaExq -0.5 avg vs static Int4 (Qwen3-80B)",
+  "ablation": "GEMQ router fine-tune and progressive quantisation (Fig 5, Tables 5, 17-21); DynaExq none isolating caching",
+  "limitations": "GEMQ high quantisation-time GPU memory",
+  "contradicts_our_findings": "D.md says the 7% MMLU drop is not reproduced; it is reported by GEMQ (static allocation) and was simply not tested by us",
+  "unread_reason": null
+ }
+]

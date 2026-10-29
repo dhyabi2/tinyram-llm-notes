@@ -1,0 +1,542 @@
+[
+ {
+  "method_row_id": "P-0211",
+  "title": "MoE-Infinity: Efficient MoE Inference on Personal Machines with Sparsity-Aware Expert Cache (Xue, Fu, Lu, Sun, Mai, Marina; Edinburgh)",
+  "id_read": "arXiv 2401.14361v3 (12 Mar 2025)",
+  "raw_text_read": true,
+  "setup": "batch 1; RTX A5000 24GB, PCIe4 (24 GB/s Table 1, 32 GB/s text); all experts in host DRAM 32GB-1TB, no SSD; DeepSeek-V2-Lite, Mixtral-8x7B, Switch, NLLB, Arctic; prompt 512 decode 32; baselines DeepSpeed-Inference, llama.cpp, Mixtral-Offloading, vLLM, BrainStorm (reimplemented)",
+  "numbers": [
+   {
+    "what": "TPOT avg DeepSeek-V2-Lite",
+    "value": "155 ms",
+    "baseline": "DeepSpeed 737, Mixtral-Offloading 1250, Ollama 2590, vLLM 485 ms",
+    "ratio": "4.75x / 8.06x / 16.7x / 3.13x",
+    "where": "Table 1 p1"
+   },
+   {
+    "what": "Mixtral latency",
+    "value": "836 ms",
+    "baseline": "BrainStorm/Mixtral-Offloading",
+    "ratio": "1.4x",
+    "where": "Sec 5.1 p7"
+   },
+   {
+    "what": "Conclusion range",
+    "value": "2.7-13.7x",
+    "baseline": "",
+    "ratio": "differs from abstract 3.1-16.7x",
+    "where": "p8"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "3.1-16.7x latency vs GPU-offload baselines",
+    "correct": "yes",
+    "true_value": "DeepSeek-V2-Lite avg TPOT vs vLLM..Ollama; conclusion says 2.7-13.7x"
+   },
+   {
+    "claim": "not ARC, not SSD",
+    "correct": "yes",
+    "true_value": "LRU cited as baseline; no SSD tier"
+   },
+   {
+    "claim": "first pass: hardware not on page",
+    "correct": "no",
+    "true_value": "A5000 24GB, PCIe4, host DRAM 32GB-1TB"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU VRAM cache over host DRAM, GPU-offload baselines, no SSD, 64-128 experts, all weights fit in host RAM; cache is share of VRAM not 2-4 footprints",
+  "quality_loss": "none (lossless)",
+  "ablation": "EAMC capacity (Fig 9); workload shift (Table 3); no separate cache vs prefetch vs policy ablation",
+  "limitations": "batch 1 personal use only; multi-server future work; long context shrinks expert buffer (falls to on-demand at 2^17)",
+  "contradicts_our_findings": "no; states LRU is the common implementation and reuse skew exists only within a request",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0212",
+  "title": "DAOP: Data-Aware Offloading and Predictive Pre-Calculation for Efficient MoE Inference (Zhang, Aggarwal, Mitra; NUS)",
+  "id_read": "arXiv 2501.10375v3 (stamp 21 Aug 2026); DATE 2025",
+  "raw_text_read": true,
+  "setup": "batch 1; i9-10980XE 18c 130GB DDR + RTX A6000 48GB, PCIe4 64GB/s; Mixtral 8x7B, Phi-3.5-MoE (top-2); HF Transformers; baselines MoE-OnDemand, DeepSpeed-MII, Mixtral-Offloading, Fiddler; ECR 46.9% in Fig 9",
+  "numbers": [
+   {
+    "what": "decode tok/s [256,512]",
+    "value": "Mixtral 4.52, Phi-3.5 8.21",
+    "baseline": "Fiddler +40.4% (implied 3.22)",
+    "ratio": "1.404x",
+    "where": "Fig 9 p4"
+   },
+   {
+    "what": "avg over ECR 15-50%",
+    "value": "+35.4%",
+    "baseline": "Fiddler",
+    "ratio": "1.354x",
+    "where": "Fig 10"
+   },
+   {
+    "what": "ECR 25%",
+    "value": "3.23 tok/s Mixtral, 5.03 Phi",
+    "baseline": "",
+    "ratio": "",
+    "where": "p4"
+   },
+   {
+    "what": "max speedup",
+    "value": "8.20x vs caching/prefetch; 1.35x vs offloading",
+    "baseline": "",
+    "ratio": "not derivable from text (figure only)",
+    "where": "abstract"
+   },
+   {
+    "what": "migration vs GPU block",
+    "value": "39.87 ms vs 1.24 ms",
+    "baseline": "",
+    "ratio": "32.2x",
+    "where": "Table I (A100)"
+   },
+   {
+    "what": "GSM8K Mixtral",
+    "value": "58.91 official -> 51.48 (62.5%) / 33.51 (25%)",
+    "baseline": "official",
+    "ratio": "0.87x / 0.57x",
+    "where": "Table VI"
+   },
+   {
+    "what": "GSM8K Phi-3.5",
+    "value": "86.88 -> 74.07 (25%)",
+    "baseline": "official",
+    "ratio": "0.85x",
+    "where": "Table VI"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "per-sequence allocation from prefill",
+    "correct": "yes",
+    "true_value": "placement swapped once in prefill (threshold 1.05) then frozen during decode"
+   },
+   {
+    "claim": "first pass 4.52/8.21, +40.4%, +35.4%",
+    "correct": "yes",
+    "true_value": "as above"
+   },
+   {
+    "claim": "first pass: no quality loss noted",
+    "correct": "absent",
+    "true_value": "lossy: GSM8K drops up to 25 pts"
+   }
+  ],
+  "transfers": "no",
+  "why": "relies on GPU faster than CPU and CPU compute of missing experts; our regime is CPU-only with NVMe reads; 8-16 experts not 512; never compared with LRU",
+  "quality_loss": "yes: Table V prefill tasks within 0.3; Table VI TriviaQA 71.59->69.08, BBH 49.36->46.61, GSM8K 58.91->33.51 at ECR 25%",
+  "ablation": "none isolating allocation from pre-calculation; ECR sweep only",
+  "limitations": "GSM8K degradation; assumes GPU faster and CPU-GPU transfer slower than CPU expert compute",
+  "contradicts_our_findings": "no; does not test in-sequence LRU",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0213",
+  "title": "OD-MoE: On-Demand Expert Loading for Cacheless Edge-Distributed MoE Inference (Wang, Du, Pan, Liew, Liu, Chen; CUHK)",
+  "id_read": "arXiv 2512.03927v1 (3 Dec 2025)",
+  "raw_text_read": true,
+  "setup": "Mixtral-8x7B, greedy, batch 1; 10 nodes: main 1x3090, shadow 2x3090 INT8, 8 workers 1x3090 192GB DRAM, R7-7700, 1 GbE; baselines on 8x3090 EPYC 7K62 512GB; 60 Alpaca prompts (16/128 in, 64/256 out); footnote: no SSD/NVMe due to large access delay",
+  "numbers": [
+   {
+    "what": "decode tok/s avg",
+    "value": "3.6925",
+    "baseline": "Transformers 4.8900",
+    "ratio": "0.755",
+    "where": "Table 2"
+   },
+   {
+    "what": "decode vs llama.cpp CPU",
+    "value": "3.6925",
+    "baseline": "0.8225",
+    "ratio": "4.49x",
+    "where": "Table 2"
+   },
+   {
+    "what": "vs Mixtral-Offloading / MoE-Infinity / HOBBIT / AdapMoE",
+    "value": "3.6925",
+    "baseline": "2.2375 / 0.6875 / 0.7850 / 3.1300",
+    "ratio": "1.65x / 5.37x / 4.70x / 1.18x",
+    "where": "Table 2"
+   },
+   {
+    "what": "TTFT avg",
+    "value": "2244 ms",
+    "baseline": "Transformers 417 ms",
+    "ratio": "5.4x slower",
+    "where": "Table 2"
+   },
+   {
+    "what": "GPU memory",
+    "value": "60 GB",
+    "baseline": "Transformers 180 GB",
+    "ratio": "0.33",
+    "where": "Table 2 (ii)"
+   },
+   {
+    "what": "recall FP16/INT8/NF4",
+    "value": "99.94/97.34/95.67%",
+    "baseline": "AdapMoE .86, DAOP .84, HOBBIT .91",
+    "ratio": "",
+    "where": "Fig 3, Table 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "network-distributed expert loading is published",
+    "correct": "yes",
+    "true_value": "cacheless parallel loading from worker DRAM"
+   },
+   {
+    "claim": "first pass 3.69, 75.5%, 4.49x, recalls, TTFT 2244/417",
+    "correct": "yes",
+    "true_value": "as above"
+   }
+  ],
+  "transfers": "no",
+  "why": "GPU nodes, DRAM tier, 8-expert model, shadow predictor needs a second model; authors reject SSD",
+  "quality_loss": "none for OD-MoE (full precision); baselines lose (MMLU 70.34 vs 49.82-55.26; GSM8K 64.14 vs 22-60)",
+  "ablation": "yes: alignment (token/KV) and shadow vs random prefetch vs no prefetch (Fig 8-9)",
+  "limitations": "shadow node GPU memory; network delays",
+  "contradicts_our_findings": "no; its MoE-Infinity reproduction (0.69 tok/s) is far below P-0211 claims",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0214",
+  "title": "Understanding MoE Offloading (SomeOddCodeGuy, DEV Community, 13 Oct 2025)",
+  "id_read": "https://dev.to/someoddcodeguy/understanding-moe-offloading-5co6",
+  "raw_text_read": true,
+  "setup": "explainer only; gpt-oss-120b (5.1B active, 36 layers, 128 experts, top-4, expert ~24M params), llama.cpp --n-cpu-moe on 24GB GPU; no measurements",
+  "numbers": [
+   {
+    "what": "dense / active expert params",
+    "value": "~1.5B / ~3.5B",
+    "baseline": "",
+    "ratio": "",
+    "where": "text"
+   },
+   {
+    "what": "throughput",
+    "value": "none",
+    "baseline": "",
+    "ratio": "",
+    "where": ""
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "llama.cpp RPC backend / mac-tensor, experts over network among Macs",
+    "correct": "no",
+    "true_value": "page covers --n-cpu-moe CPU-GPU split; no RPC, no network, no Macs"
+   }
+  ],
+  "transfers": "no",
+  "why": "CPU-GPU over PCIe, DRAM resident; only shows stock llama.cpp computes offloaded experts on CPU instead of streaming them",
+  "quality_loss": "n/a",
+  "ablation": "none",
+  "limitations": "author: best N is trial and error; first-N-layers correction",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0216",
+  "title": "1.5 TB of VRAM on Mac Studio - RDMA over Thunderbolt 5 (Jeff Geerling, 18 Dec 2025)",
+  "id_read": "jeffgeerling.com blog + 3 chart images",
+  "raw_text_read": true,
+  "setup": "4x M3 Ultra Mac Studio (2x512GB, 2x256GB), TB5 mesh 50-60 Gbps real, macOS 26.2 RDMA, Exo 1.0 vs llama.cpp RPC TCP; batch, quant, context unstated; prerelease software",
+  "numbers": [
+   {
+    "what": "DeepSeek V3.1 671B Exo 1/2/4 nodes",
+    "value": "21.1/27.8/32.5 t/s",
+    "baseline": "llama.cpp 14.8/16.0/14.6",
+    "ratio": "1.43x/1.74x/2.23x vs llama.cpp; 4-node/1-node 1.54x",
+    "where": "chart 2"
+   },
+   {
+    "what": "Qwen3 235B A22B Exo",
+    "value": "19.5/26.2/31.9 t/s",
+    "baseline": "llama.cpp 20.4/17.2/15.2",
+    "ratio": "4-node/1-node 1.64x; vs llama.cpp 2.10x at 4",
+    "where": "chart 1"
+   },
+   {
+    "what": "Kimi K2 Thinking Exo 2/4 nodes",
+    "value": "21.6/28.3 t/s",
+    "baseline": "llama.cpp 18.5/16.4",
+    "ratio": "1.17x/1.73x",
+    "where": "chart 3"
+   },
+   {
+    "what": "RDMA latency",
+    "value": "300 us -> <50 us",
+    "baseline": "",
+    "ratio": "",
+    "where": "text"
+   },
+   {
+    "what": "cost",
+    "value": "just shy of $40,000",
+    "baseline": "",
+    "ratio": "",
+    "where": "text"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "DeepSeek V3.1 21.1/27.8/32.5 tok/s on 1/2/4 nodes",
+    "correct": "yes",
+    "true_value": "confirmed in chart image; first pass wrongly said unconfirmable"
+   },
+   {
+    "claim": "Kimi K2 about 28 tok/s on four nodes",
+    "correct": "yes",
+    "true_value": "28.3 in chart; text says around 30; first pass wrongly said 30 not 28"
+   },
+   {
+    "claim": "RDMA clustering of large MoE is done",
+    "correct": "yes",
+    "true_value": "Exo only; llama.cpp RPC slows with nodes"
+   }
+  ],
+  "transfers": "no",
+  "why": "model resident across nodes' RAM, 819 GB/s class memory, GPU-class compute; no thin client pulling weights per token",
+  "quality_loss": "not discussed",
+  "ablation": "Exo vs llama.cpp across node counts only",
+  "limitations": "prerelease software, RDMA crashes, max 4 nodes (no TB5 switch), macOS management",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0217",
+  "title": "FIRM-MoE: Fine-Grained Expert Decomposition for Resource-Adaptive MoE Inference (Chen, Zhou, Qian, Wen, Meng, He; Zhejiang; AAAI-26 40(24) pp 20190-20198) [row text names OD-MoE]",
+  "id_read": "AAAI PDF (article/view/39106/43068), DOI 10.1609/aaai.v40i24.39106; OD-MoE = arXiv 2512.03927 (see P-0213)",
+  "raw_text_read": true,
+  "setup": "RTX 3090 24GB, 32-core CPU, 64GB DRAM, PCIe4 32GB/s; Qwen1.5-MoE-A2.7B, Qwen3-30B-A3B, DeepSeek-MoE-16B, DeepSeek-V2-Lite; batch 1; cache 128-896 experts; baselines AdapMoE, MoE-Infinity, DeepSpeed, Fiddler, llama.cpp, Mixtral-offloading style BB",
+  "numbers": [
+   {
+    "what": "abstract",
+    "value": "up to 1.5x speedup, 2.8x memory saving decoding",
+    "baseline": "SOTA offloading",
+    "ratio": "",
+    "where": "abstract"
+   },
+   {
+    "what": "Qwen1.5-MoE latency",
+    "value": "1.8x at 128-expert cache, 1.6x at 768",
+    "baseline": "BB",
+    "ratio": "",
+    "where": "Fig 4 text"
+   },
+   {
+    "what": "cache 128 vs 768",
+    "value": "<30% slower, 2.85x less memory",
+    "baseline": "",
+    "ratio": "",
+    "where": "text"
+   },
+   {
+    "what": "fine-grained prefetch",
+    "value": "1.24-1.41x",
+    "baseline": "coarse equal-ratio",
+    "ratio": "",
+    "where": "Table 1"
+   },
+   {
+    "what": "avg throughput",
+    "value": "1.31x",
+    "baseline": "Fiddler/llama.cpp",
+    "ratio": "",
+    "where": "Fig 5"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "row text: ten-node OD-MoE without caches",
+    "correct": "no",
+    "true_value": "URL is FIRM-MoE (single GPU, local DRAM); OD-MoE is P-0213"
+   },
+   {
+    "claim": "first pass up to 1.5x / 2.8x",
+    "correct": "yes",
+    "true_value": "abstract; body also gives up to 1.8x vs BB"
+   }
+  ],
+  "transfers": "no",
+  "why": "single GPU, PCIe4 DRAM tier, 14-30B models, no SSD or network",
+  "quality_loss": "none claimed (lossless)",
+  "ablation": "yes: fine-grained vs coarse (Table 1), granularity n (Table 2), predictors (Fig 7)",
+  "limitations": "prediction accuracy sensitivity; search cost",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0218",
+  "title": "Broadcast Rate Limits in Wi-Fi: A Forgotten Bottleneck for Collaborative Edge LLM Inference (Wang, Du, Xu, Liew; CUHK) [row text names WDMoE]",
+  "id_read": "arXiv 2608.02341v1 (3 Aug 2026); WDMoE = 2405.03131 / 2411.06681 (abstracts only)",
+  "raw_text_read": true,
+  "setup": "Qwen3-30B-A3B (8/128), 1 main + 8 workers + 1 predictor, RTX 3090 each, 10 Gbps LAN; Wi-Fi 7 router RT-BE96U 6GHz 320MHz; NS-3 at 1/2/5 m",
+  "numbers": [
+   {
+    "what": "wired expert layer time UDP vs NCCL",
+    "value": "2.56 ms (72% of NCCL)",
+    "baseline": "NCCL ~3.56 ms",
+    "ratio": "1.4x",
+    "where": "Fig 6a"
+   },
+   {
+    "what": "wireless expert layer time",
+    "value": "UDP 32.01, TCP 7.20, NCCL 471.73 ms",
+    "baseline": "",
+    "ratio": "UDP 12.5x its wired time; NCCL ~100x",
+    "where": "Fig 8"
+   },
+   {
+    "what": "optimal MCS rate vs 54 Mbps",
+    "value": "3459/2306/1729 Mbps at 1/2/5 m",
+    "baseline": "54 Mbps broadcast cap",
+    "ratio": "64.1x/42.7x/32.0x",
+    "where": "Fig 9"
+   },
+   {
+    "what": "max theoretical speedup",
+    "value": "16/9",
+    "baseline": "",
+    "ratio": "1.78x",
+    "where": "Sec 3.2"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "Wi-Fi broadcast about 54 Mbps is the bottleneck",
+    "correct": "yes",
+    "true_value": "802.11 broadcast basic rate cap"
+   },
+   {
+    "claim": "experts on workers, activations travel",
+    "correct": "yes",
+    "true_value": "embeddings broadcast"
+   },
+   {
+    "claim": "row names WDMoE",
+    "correct": "no",
+    "true_value": "different paper; WDMoE is 2405.03131 / 2411.06681"
+   }
+  ],
+  "transfers": "no",
+  "why": "activation traffic to GPU workers; weights stay put; unicast weight stream unaffected by broadcast cap",
+  "quality_loss": "none",
+  "ablation": "3 predictors, UDP/TCP/NCCL",
+  "limitations": "wireless via simulation and emulation; firmware cannot be changed",
+  "contradicts_our_findings": "no",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0219",
+  "title": "How to Set Up Multi-Node Local LLM Inference: The Complete 2026 Guide (Dawid Wozniak, fungies.io, 1 Jul 2026)",
+  "id_read": "https://fungies.io/multi-node-local-llm-inference-guide-2026",
+  "raw_text_read": true,
+  "setup": "generic guide; vLLM+Ray, llama.cpp RPC, Dynamo; unsourced tables; no MoE benchmark",
+  "numbers": [
+   {
+    "what": "llama.cpp RPC CPU-only 70B",
+    "value": "2-5 tok/s",
+    "baseline": "",
+    "ratio": "",
+    "where": "Option 2 text, unsourced"
+   },
+   {
+    "what": "Llama 3.1 70B 2x4090 10GbE",
+    "value": "38 tok/s",
+    "baseline": "single GPU 45",
+    "ratio": "0.84",
+    "where": "table, unsourced"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "200B+ MoE at Q4 about 4-8 tok/s across 10 Gbps",
+    "correct": "absent",
+    "true_value": "not on page"
+   },
+   {
+    "claim": "per-token sync about 16 ms",
+    "correct": "absent",
+    "true_value": "not on page"
+   },
+   {
+    "claim": "ships activations to node with weights",
+    "correct": "yes",
+    "true_value": "RPC splits layers across machines"
+   }
+  ],
+  "transfers": "no",
+  "why": "no usable MoE data; arithmetic errors (405B FP16 = ten 4090s)",
+  "quality_loss": "none",
+  "ablation": "none",
+  "limitations": "none stated",
+  "contradicts_our_findings": "no; E.md claim '4-8 tok/s for 200B+ MoE on 10GbE' has no source here",
+  "unread_reason": ""
+ },
+ {
+  "method_row_id": "P-0221",
+  "title": "Elbow-Based MoE Routing: A Training-Free Inference Time Plugin for Expert Selection (Pan, Liu, Fang, Andrei, Wu; Harvard; ICLR 2026 TTU workshop)",
+  "id_read": "arXiv 2608.04401v1 (5 Aug 2026)",
+  "raw_text_read": true,
+  "setup": "OLMoE-1B-7B-0924-Instruct (64 experts, top-8, 16 layers), cap K=8; one NVIDIA H200; latency = MoE block forward pass wall-clock; batch/seq unstated; six MC benchmarks",
+  "numbers": [
+   {
+    "what": "latency ARC-Easy",
+    "value": "10.497 ms",
+    "baseline": "11.203 ms",
+    "ratio": "0.937 (6.3% less)",
+    "where": "Table 2"
+   },
+   {
+    "what": "latency mean over 6 benchmarks",
+    "value": "11.649 ms",
+    "baseline": "12.285 ms",
+    "ratio": "0.948 (5.31% mean)",
+    "where": "Table 2 (mine)"
+   },
+   {
+    "what": "mean k",
+    "value": "7.615 of 8",
+    "baseline": "8",
+    "ratio": "0.952",
+    "where": "Table 2"
+   },
+   {
+    "what": "accuracy max drop",
+    "value": "0.33 pts (PIQA 73.18->72.85)",
+    "baseline": "base",
+    "ratio": "",
+    "where": "Table 2"
+   },
+   {
+    "what": "load balance",
+    "value": "l1 0.034, top-1 share -2.16%, CV -2.83%",
+    "baseline": "top-8",
+    "ratio": "",
+    "where": "Table 1"
+   }
+  ],
+  "catalog_numbers_correct": [
+   {
+    "claim": "per-token adaptive k, 5.3% latency reduction, no accuracy loss",
+    "correct": "yes",
+    "true_value": "5.31% mean; accuracy within 0.33; MoE-block time on H200, not whole forward pass"
+   }
+  ],
+  "transfers": "no",
+  "why": "prunes only about 5% of experts (7.6 of 8) on one small GPU model; nothing at k=4; latency is MoE-block time",
+  "quality_loss": "within 0.33 points on six benchmarks at k=7.6",
+  "ablation": "tail vs pre-elbow expert randomisation on MMLU (Fig 2)",
+  "limitations": "workshop paper, one model, latency of block forward pass only",
+  "contradicts_our_findings": "no (our top-4 perplexity +45.6% concerns a far larger cut)",
+  "unread_reason": ""
+ }
+]
