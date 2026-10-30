@@ -1,23 +1,26 @@
 # Master idea register
 
-80 canonical ideas from 349 raw ideas: 252 brainstorm families (1,502 engine runs over 7 rounds), 56 angle-sweep ideas, and 41 ideas from the working sessions. Status is judged against the vault, the measurements, the trace simulations and the paper checks. Raw-to-canonical mapping: `IDEA_REGISTER.csv` (column ids = ids in `raw_ideas.json`). Status counts: measured_positive 9, measured_neutral 5, measured_refuted 10, simulated_positive 7, needs_quality_eval 7, untested 18, needs_hardware 3, published_only 2, simulated_negative 19.
-
-'applies' says where the idea would run: any_pc, os_specific, windows_port_needed, needs_second_machine, needs_gpu, needs_special_hardware, needs_training.
+82 canonical ideas from 349 raw ideas plus later tests (252 brainstorm families, 56 angle-sweep ideas, 41 session ideas). Status is judged against the vault, measurements, trace simulations and paper checks; updated 2026-10-30 after the Mac test series. Status counts: measured_positive 14, measured_neutral 6, measured_refuted 11, simulated_positive 5, needs_quality_eval 6, untested 16, needs_hardware 3, published_only 2, simulated_negative 19.
 
 
 ## measured positive
 
 | idea | category | applies | raw | headline result | next step |
 |---|---|---|---|---|---|
+| **reduced top-k experts** - Activate fewer experts per token (top-6, top-4, adaptive k). | expert_count_routing | any_pc | 17 | Anchored 6 experts +3.3 percent (docs) / +5.3 percent (code) perplexity, speed 1.5x on the pool; 4 experts anchored +18.5 percent vs +30.9 percent standard. | Task benchmarks; combine with cache bias. |
 | **overlap io with compute** - Overlap expert reads with compute using concurrent I/O in the pool. | prefetch_overlap | any_pc | 14 | About 1.15-1.16x over the synchronous pool on decode (Mac); prefill overlap untested. | Measure prefill TTFT overlap and port the async reader to Linux/Windows. |
 | **explicit read pool** - Large concurrent explicit preads (O_DIRECT/F_NOCACHE) with a byte-capacity LRU instead of mmap. | io_read_path | any_pc | 8 | 4.4-5.2x over plain mmap on the Mac with Qwen3-30B and 9 GB ballast. | Port and verify on Linux and Windows PCs, with auto-sized pool. |
+| **kv prefix cache on disk** - Persist KV for repeated prefixes and restore from disk to skip prefill. | kv_context | any_pc | 6 | Repeated 450-token prompt: wall time 62.9 s -> 11.1 s (5.7x), cache file 41 MB; decode unchanged. | Check the small numerical difference in output text. |
 | **thread count and barrier tuning** - Use physical cores and tune barrier spinning. | os_memory_settings | any_pc | 4 | Hyperthread oversubscription collapses ggml barrier spinning 11x; physical cores only. | Auto-detect physical cores in the tool. |
+| **cache-aware expert routing** - Bias routing toward cached experts. | expert_count_routing | any_pc | 4 | Selection bias toward resident experts: 1.35x (bias 1) to 1.85x (bias 3) over the pool alone; misses cut 60-90 percent; perplexity +0.03-0.07 percent on documentation, +4.6 percent on code at bias 3. With 6 experts: 4.06-5.84 tok/s vs 2.17 pool alone. | Check on task benchmarks and on the 125B; choose bias per workload. |
+| **adaptive pool size** - Size the pool by free memory and pressure. | os_memory_settings | os_specific | 3 | Avoids the collapse of an oversized pool (0.2 -> 1.4 tok/s) but about 0.8x of a well-chosen fixed size. | Keep auto-size from available RAM plus adaptive shrink as default. |
 | **compute versus I/O bound measurement** - Measure whether decode and prefill are compute or I/O bound. | measurement_method | any_pc | 1 | About 55 GFLOP/s measured on 30B; 4.6 tok/s ceiling for the 125B. | Build as an auto-calibration step in the tool for other PCs. |
 | **madvise read-ahead hints** - Use madvise hints with mmap. | io_read_path | os_specific | 1 | 1.65x on throttled Linux VPS, 1.08x on Mac; far below explicit pool. | Use only as Linux fallback. |
 | **wired ballast test method** - Wire memory to emulate a small-RAM PC. | measurement_method | windows_port_needed | 1 | Verified 96-100% emulation without sudo. | Reuse on every new PC. |
 | **disable repack** - Pass --repack 0 to keep the pool path usable. | os_memory_settings | any_pc | 1 | Required on small RAM. | Make default. |
 | **free ram for page cache** - More free RAM helps mmap. | os_memory_settings | any_pc | 1 | Helps plain mmap strongly; pool still wins at same RAM. | Document. |
 | **validity-gated ab method** - A/B with validity gates. | measurement_method | any_pc | 1 | Caught invalid cached runs and noise-level claims. | Package in the portable tool. |
+| **anchored renormalisation for fewer experts** - Select native top-k, normalise over all of them, compute only the first K. | expert_count_routing | any_pc | 1 | Anchoring the weight denominator to the native top-k helps only at aggressive cuts: 4 experts +18.5 percent vs +30.9 percent; 6 experts +5.1 vs +4.7 (no gain). | Use with cache bias; evaluate on tasks. |
 
 ## measured neutral
 
@@ -27,15 +30,16 @@
 | **multi-drive striping** - Stripe reads across drives or NAND dies. | hardware_tier | needs_special_hardware | 5 | Single drive saturates at about 3.1-3.4 GB/s with 4 threads; second drive expected 1.1-1.2x serial. | Test only if a second NVMe is present. |
 | **hand-tuned kernel variants** - Hand-tuned int4, fused, nibble-skipping or cache-tiled kernels. | compute_kernel | any_pc | 4 | Decode shows no kernel gain; prefill 950 GFLOP/s claim unmeasured. | Profile prefill only if proven compute-bound. |
 | **dense weight residency** - Lock dense weights in RAM. | os_memory_settings | any_pc | 4 | No effect on tok/s with the pool. | Drop. |
+| **quantised kv cache** - Quantise the KV cache. | kv_context | any_pc | 3 | q8_0 KV 2.18 vs 1.90 tok/s median (+15 percent) but within noise at short context. | Retest at long context. |
 | **dram bandwidth ceiling** - Measure DRAM bandwidth ceiling. | compute_kernel | any_pc | 1 | Microbenchmark done; kernel route gave no decode gain. | None. |
 
 ## measured refuted
 
 | idea | category | applies | raw | headline result | next step |
 |---|---|---|---|---|---|
-| **reduced top-k experts** - Activate fewer experts per token (top-6, top-4, adaptive k). | expert_count_routing | any_pc | 17 | Top-4 costs +30.9% ppl; top-6 gives 1.12-1.24x for +4.7% ppl. | Ship top-6 only as an opt-in flag after a perplexity run on the target model. |
 | **shared low-rank expert basis** - Factor experts into a shared low-rank basis plus small residuals to cut bytes or FLOPs. | quantisation_bytes | any_pc | 14 | No shared low-rank structure in raw expert weights; flat spectrum, so the 4.3x byte cut is unsupported. | Drop. |
 | **idle-time prefill and prefill while typing** - Prefill the typed prefix or warm the cache while the user is still typing. | prefill_ttft | any_pc | 14 | VNNI premise removed; gain only when typing is slow and disk idle; decode 1.0x. | One confirming run limited to exact causal prefix with KV reuse; otherwise drop. |
+| **layer skipping** - Skip or exit early from transformer layers using a gate, router or mixture-of-depths. | expert_count_routing | needs_training | 11 | Training-free: 25 percent of whole layers +118 percent perplexity, 12.5 percent +20.6, MoE-only in 25 percent of layers +24.5 percent. | Closed unless trained. |
 | **vector-quantised expert codebook lookup** - Replace expert weights with product-VQ codebook indices and a lookup/gather kernel. | quantisation_bytes | needs_training | 8 | Compute half refuted by microbenchmark; byte cut gives about 1.5x serial; 1.3 bpw quality error too high. | Drop the kernel claim; only revisit as a plain byte cut with a perplexity eval at 2 bpw or more. |
 | **VNNI int8 kernel** - AVX512-VNNI int8 dot kernels for decode. | compute_kernel | any_pc | 8 | Output identical, no end-to-end speed-up (claimed 1.55x); decode is DRAM-bound. | Drop. |
 | **static hot expert pinning** - Pin a prompt-derived or hot set of experts in RAM. | cache_policy | any_pc | 7 | No better than LRU; cross-prompt hit 0.05-0.21; pin by prompt share 0.6-0.75x of LRU. | Drop. |
@@ -43,6 +47,7 @@
 | **inter-expert dedup** - Deduplicate near-identical experts. | quantisation_bytes | any_pc | 2 | Refuted by null test; claimed 1.00. | Drop. |
 | **pre-unpacked int8 weights** - Store weights unpacked as int8 to speed compute. | quantisation_bytes | any_pc | 1 | Slower than Q4_K in RAM-resident decode and doubles bytes read. | Drop. |
 | **core split io threads** - Dedicate cores to I/O threads. | os_memory_settings | any_pc | 1 | 2 vs 4 threads shows only 8%. | Drop. |
+| **pool warm start from a previous prompt** - Persist the hot expert list and preload it at start. | cache_policy | any_pc | 1 | No change in misses (32,278 vs 32,312) when primed from a different prompt; prefill slightly slower. | Same-prompt warm start unmeasured (agent loops). |
 
 ## simulated positive
 
@@ -50,8 +55,6 @@
 |---|---|---|---|---|---|
 | **remote expert compute over LAN** - A peer PC holds experts in RAM and computes them, shipping small activations over the LAN. | distributed | needs_second_machine | 10 | Best distributed variant on paper (KB activations per layer) but needs a 64 GB+ peer and low-latency link; no run. | Two-PC prototype measuring per-layer round-trip latency. |
 | **contiguous per-expert layout** - Repack each expert into one contiguous extent (bundled gate/up/down, kernel-interleaved). | layout_file | any_pc | 10 | Reorder gain at most 1.07x; micro read-rate about 1.15x; most claimed gain is the already-measured large-read effect. | Build the repacked file and measure end-to-end on 8 GB. |
-| **kv prefix cache on disk** - Persist KV for repeated prefixes and restore from disk to skip prefill. | kv_context | any_pc | 6 | Lossless TTFT win only on repeated prefixes; no gain on a miss and decode stays 1.0x; not measured. | Implement on-disk KV restore and time TTFT on a repeated system prompt with the pool active. |
-| **cache-aware expert routing** - Bias routing toward cached experts. | expert_count_routing | any_pc | 4 | Trace-simulated 1.38x at 8 GB; quality unmeasured. | Perplexity run with logit bias. |
 | **grammar jump-forward** - Skip decoding for forced tokens in structured output. | speculation_batching | any_pc | 3 | Small, workload-dependent; claim of 1.5 not supported. | Try on tool-call/JSON workloads. |
 | **GPU hot expert tier** - Keep hot experts in VRAM. | hardware_tier | needs_gpu | 2 | Modelled gain only; depends on PCIe and hit rate at 20 GB cache. | Test on a PC with a discrete GPU. |
 | **layer-streamed prefill** - Stream layers through prefill so weights are read once per layer for the whole prompt. | prefill_ttft | any_pc | 2 | Positive for TTFT on paper; pool measured on decode only. | Measure TTFT end-to-end. |
@@ -60,7 +63,6 @@
 
 | idea | category | applies | raw | headline result | next step |
 |---|---|---|---|---|---|
-| **layer skipping** - Skip or exit early from transformer layers using a gate, router or mixture-of-depths. | expert_count_routing | needs_training | 11 | Only lever reaching about 3x at 67% skip in the model, but no perplexity measured and gate needs training. | Run a training-free layer-ablation perplexity sweep on the 30B. |
 | **ultra low-bit experts** - Ternary or 2-bit experts. | quantisation_bytes | any_pc | 4 | Compute cut unproven since low-bit kernels did not speed up; quality unmeasured. | Perplexity eval at 2-bit on Qwen3-30B. |
 | **mixed-precision requantisation map** - Requantise down projections or per-layer bit maps. | quantisation_bytes | any_pc | 3 | Down tensors about 45% of an expert; tool built but no perplexity result. | Run tiered perplexity with the existing tool. |
 | **cold expert low-bit tier** - Read cold or low-weight experts at lower precision. | quantisation_bytes | any_pc | 2 | Byte gain small once I/O overlaps; ranking unstable across prompts. | Quality eval of mixed-precision miss path. |
@@ -75,8 +77,6 @@
 | **expert output prediction skip** - Predict or approximate expert outputs and skip the expert. | compute_kernel | needs_training | 4 | No measurement; needs trained rank-64 predictor and a skip-vs-perplexity curve. | Cheap one-layer test of predicting expert output from previous activation. |
 | **NPU and iGPU offload** - Offload GEMV to an integrated GPU or NPU. | hardware_tier | needs_gpu | 3 | iGPU shares DRAM bandwidth; no Gen11 benchmark found. | Skip. |
 | **early draft while prefilling** - Emit a draft answer during prefill. | prefill_ttft | any_pc | 3 | Perceived latency only; lossy. | Skip. |
-| **quantised kv cache** - Quantise the KV cache. | kv_context | any_pc | 3 | Bound about 1.06x at short context. | Only for long context. |
-| **adaptive pool size** - Size the pool by free memory and pressure. | os_memory_settings | os_specific | 3 | Pool 3000 to 6000 MB gave +16%; adaptive not built. | Build pressure-adaptive sizing so the tool self-tunes on other PCs. |
 | **storage hardware tweaks** - Exotic drive or CXL tweaks to reduce storage latency. | hardware_tier | needs_special_hardware | 2 | No evidence of a cliff on our disks; needs special hardware. | Skip. |
 | **userfaultfd fault path** - Handle expert page faults in userspace with aligned reads. | prefill_ttft | os_specific | 2 | Explicit pread already bypasses the fault path (measured); Linux-only. | Skip. |
 | **expert output memoization** - Reuse cached expert outputs. | compute_kernel | any_pc | 2 | Valid only for identical contexts, already covered by prefix KV cache. | Drop. |
